@@ -206,7 +206,7 @@ export default function Globe3D({
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 2000);
-    camera.position.set(0, 0.6, 18.8);
+    camera.position.set(0, 24, 70);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -226,23 +226,23 @@ export default function Globe3D({
     controls.dampingFactor = 0.05;
     controls.enablePan = false; // Keeps Earth anchored dead-center
     controls.minDistance = 6.8;
-    controls.maxDistance = 160.0; // Allows zooming out to view full Solar System
+    controls.maxDistance = 250.0; // Allows zooming out to view full Solar System
     controls.autoRotate = autoRotate;
-    controls.autoRotateSpeed = 0.5;
+    controls.autoRotateSpeed = 0.4;
     controlsRef.current = controls;
 
     // 4. Natural Lighting (Deep space realistic sun & ambient)
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.70);
     scene.add(ambientLight);
 
-    // Warm, realistic sunlight facing Earth from the Sun's position
+    // Warm, realistic sunlight facing Earth from the Sun's position in deep space
     const sunLight = new THREE.DirectionalLight(0xfffaed, 2.4);
-    sunLight.position.set(2.5, 6.4, -2.5);
+    sunLight.position.set(54, 26, -42);
     scene.add(sunLight);
 
     // Subtle neutral dark-side fill
     const spaceFillLight = new THREE.DirectionalLight(0x334155, 0.40);
-    spaceFillLight.position.set(-15, -10, -10);
+    spaceFillLight.position.set(-25, -15, -20);
     scene.add(spaceFillLight);
 
     // Camera headlight for crisp spacecraft visibility
@@ -309,11 +309,11 @@ export default function Globe3D({
     const texSaturnRings = createSaturnRingsTexture();
     const texVenus = createVenusTexture();
 
-    // 1. THE SUN (Sol) - Brilliant Star in upper space illuminating Earth
-    const sunGeo = new THREE.SphereGeometry(1.25, 32, 32);
+    // 1. THE SUN (Sol) - The Supreme Luminary in Deep Space (Believably the largest body)
+    const sunGeo = new THREE.SphereGeometry(8.5, 32, 32);
     const sunMat = new THREE.MeshBasicMaterial({ map: texSun });
     const sunMesh = new THREE.Mesh(sunGeo, sunMat);
-    sunMesh.position.set(2.0, 5.4, -2.5);
+    sunMesh.position.set(54, 26, -42);
     sunMesh.userData = {
       planetData: {
         id: 'sun',
@@ -325,22 +325,22 @@ export default function Globe3D({
       }
     };
     // Glowing corona aura
-    const coronaGeo = new THREE.SphereGeometry(1.85, 32, 32);
+    const coronaGeo = new THREE.SphereGeometry(11.5, 32, 32);
     const coronaMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b, transparent: true, opacity: 0.28, side: THREE.BackSide });
     sunMesh.add(new THREE.Mesh(coronaGeo, coronaMat));
-    const sunLabel = createBillboardLabel('THE SUN ☀️', '#f59e0b', [3.2, 0.82, 1]);
-    sunLabel.position.set(0, 1.85, 0);
+    const sunLabel = createBillboardLabel('THE SUN ☀️', '#f59e0b', [6.8, 1.7, 1]);
+    sunLabel.position.set(0, 11.2, 0);
     sunMesh.add(sunLabel);
     planetsGroup.add(sunMesh);
     planetMeshes.push(sunMesh);
 
-    // 2. THE MOON (Luna - Orbiting Earth just outside satellite belt)
+    // 2. THE MOON (Luna - Orbiting Earth outside satellite zone)
     const moonPivot = new THREE.Group();
     moonPivotRef.current = moonPivot;
     scene.add(moonPivot);
 
-    const moonOrbitR = 6.5;
-    const moonGeo = new THREE.SphereGeometry(0.46, 24, 24);
+    const moonOrbitR = 12.0;
+    const moonGeo = new THREE.SphereGeometry(0.85, 24, 24);
     const moonMat = new THREE.MeshStandardMaterial({ map: texMoon, roughness: 0.8 });
     const moonMesh = new THREE.Mesh(moonGeo, moonMat);
     moonMesh.position.set(moonOrbitR, 0, 0);
@@ -354,8 +354,8 @@ export default function Globe3D({
         diameter: '3,474 km'
       }
     };
-    const moonLabel = createBillboardLabel('MOON 🌕', '#cbd5e1', [2.8, 0.72, 1]);
-    moonLabel.position.set(0, 0.85, 0);
+    const moonLabel = createBillboardLabel('MOON 🌕', '#cbd5e1', [4.2, 1.05, 1]);
+    moonLabel.position.set(0, 1.45, 0);
     moonMesh.add(moonLabel);
     moonPivot.add(moonMesh);
     planetMeshes.push(moonMesh);
@@ -372,11 +372,11 @@ export default function Globe3D({
     );
     scene.add(moonOrbitLine);
 
-    // 3. MERCURY
-    const mercGeo = new THREE.SphereGeometry(0.38, 24, 24);
+    // 3. MERCURY (Smallest Terrestrial Planet)
+    const mercGeo = new THREE.SphereGeometry(1.0, 24, 24);
     const mercMat = new THREE.MeshStandardMaterial({ color: 0xa1a1aa, roughness: 0.8 });
     const mercMesh = new THREE.Mesh(mercGeo, mercMat);
-    mercMesh.position.set(4.2, 4.6, -1.5);
+    mercMesh.position.set(28, 14, -22);
     mercMesh.userData = {
       planetData: {
         id: 'mercury',
@@ -387,17 +387,17 @@ export default function Globe3D({
         diameter: '4,879 km'
       }
     };
-    const mercLabel = createBillboardLabel('MERCURY ☿', '#94a3b8', [2.8, 0.72, 1]);
-    mercLabel.position.set(0, 0.75, 0);
+    const mercLabel = createBillboardLabel('MERCURY ☿', '#94a3b8', [4.4, 1.1, 1]);
+    mercLabel.position.set(0, 1.7, 0);
     mercMesh.add(mercLabel);
     planetsGroup.add(mercMesh);
     planetMeshes.push(mercMesh);
 
-    // 4. VENUS (Shimmering Golden Atmosphere)
-    const venusGeo = new THREE.SphereGeometry(0.55, 28, 28);
+    // 4. VENUS (Earth-Sized Shimmering Golden Atmosphere)
+    const venusGeo = new THREE.SphereGeometry(1.85, 28, 28);
     const venusMat = new THREE.MeshStandardMaterial({ map: texVenus, roughness: 0.7 });
     const venusMesh = new THREE.Mesh(venusGeo, venusMat);
-    venusMesh.position.set(-2.8, 5.0, -1.0);
+    venusMesh.position.set(-32, 16, -18);
     venusMesh.userData = {
       planetData: {
         id: 'venus',
@@ -408,17 +408,17 @@ export default function Globe3D({
         diameter: '12,104 km'
       }
     };
-    const venusLabel = createBillboardLabel('VENUS ♀', '#eab308', [2.8, 0.72, 1]);
-    venusLabel.position.set(0, 0.92, 0);
+    const venusLabel = createBillboardLabel('VENUS ♀', '#eab308', [4.6, 1.15, 1]);
+    venusLabel.position.set(0, 2.6, 0);
     venusMesh.add(venusLabel);
     planetsGroup.add(venusMesh);
     planetMeshes.push(venusMesh);
 
     // 5. MARS (The Red Planet with Polar Ice Caps)
-    const marsGeo = new THREE.SphereGeometry(0.48, 28, 28);
+    const marsGeo = new THREE.SphereGeometry(1.35, 28, 28);
     const marsMat = new THREE.MeshStandardMaterial({ map: texMars, roughness: 0.75 });
     const marsMesh = new THREE.Mesh(marsGeo, marsMat);
-    marsMesh.position.set(5.8, 2.2, 1.2);
+    marsMesh.position.set(34, -14, 22);
     marsMesh.userData = {
       planetData: {
         id: 'mars',
@@ -429,22 +429,22 @@ export default function Globe3D({
         diameter: '6,779 km'
       }
     };
-    const marsLabel = createBillboardLabel('MARS ♂', '#ef4444', [2.9, 0.75, 1]);
-    marsLabel.position.set(0, 0.85, 0);
+    const marsLabel = createBillboardLabel('MARS ♂', '#ef4444', [4.4, 1.1, 1]);
+    marsLabel.position.set(0, 2.1, 0);
     marsMesh.add(marsLabel);
     planetsGroup.add(marsMesh);
     planetMeshes.push(marsMesh);
 
-    // 6. ASTEROID BELT (Floating orbital belt in distant background behind Earth)
+    // 6. ASTEROID BELT (Floating orbital belt between Mars and Jupiter)
     const asteroidGeo = new THREE.BufferGeometry();
-    const astCount = 500;
+    const astCount = 700;
     const astPos = new Float32Array(astCount * 3);
     for (let i = 0; i < astCount * 3; i += 3) {
-      const r = 15.0 + (Math.random() - 0.5) * 4.0;
+      const r = 46.0 + (Math.random() - 0.5) * 6.0;
       const th = Math.random() * Math.PI * 2;
       astPos[i] = Math.cos(th) * r;
-      astPos[i + 1] = (Math.random() - 0.5) * 3.0;
-      astPos[i + 2] = -12.0 + (Math.random() - 0.5) * 4.0; // Strictly behind Earth!
+      astPos[i + 1] = (Math.random() - 0.5) * 4.0;
+      astPos[i + 2] = Math.sin(th) * r;
     }
     asteroidGeo.setAttribute('position', new THREE.BufferAttribute(astPos, 3));
     const asteroidBelt = new THREE.Points(
@@ -459,11 +459,11 @@ export default function Globe3D({
     );
     planetsGroup.add(asteroidBelt);
 
-    // 7. JUPITER (Gas Giant with Great Red Spot & Galilean Moons)
-    const jupGeo = new THREE.SphereGeometry(1.05, 32, 32);
+    // 7. JUPITER (King of Planets - Largest Gas Giant with Great Red Spot & Moons)
+    const jupGeo = new THREE.SphereGeometry(4.5, 32, 32);
     const jupMat = new THREE.MeshStandardMaterial({ map: texJupiter, roughness: 0.65 });
     const jupMesh = new THREE.Mesh(jupGeo, jupMat);
-    jupMesh.position.set(-5.6, 1.8, 1.2);
+    jupMesh.position.set(-52, -22, 36);
     jupMesh.userData = {
       planetData: {
         id: 'jupiter',
@@ -477,27 +477,28 @@ export default function Globe3D({
     // Galilean moons around Jupiter
     const createMiniMoon = (dist, color) => {
       const m = new THREE.Mesh(
-        new THREE.SphereGeometry(0.06, 12, 12),
+        new THREE.SphereGeometry(0.18, 12, 12),
         new THREE.MeshStandardMaterial({ color: color })
       );
       m.position.set(dist, 0, 0);
       return m;
     };
-    jupMesh.add(createMiniMoon(1.4, 0xfacc15)); // Io
-    jupMesh.add(createMiniMoon(1.75, 0xe2e8f0)); // Europa
-    jupMesh.add(createMiniMoon(2.15, 0x94a3b8)); // Ganymede
+    jupMesh.add(createMiniMoon(6.0, 0xfacc15)); // Io
+    jupMesh.add(createMiniMoon(7.5, 0xe2e8f0)); // Europa
+    jupMesh.add(createMiniMoon(9.2, 0x94a3b8)); // Ganymede
+    jupMesh.add(createMiniMoon(11.0, 0x64748b)); // Callisto
 
-    const jupLabel = createBillboardLabel('JUPITER ♃', '#d97706', [3.3, 0.85, 1]);
-    jupLabel.position.set(0, 1.6, 0);
+    const jupLabel = createBillboardLabel('JUPITER ♃', '#d97706', [6.0, 1.5, 1]);
+    jupLabel.position.set(0, 5.8, 0);
     jupMesh.add(jupLabel);
     planetsGroup.add(jupMesh);
     planetMeshes.push(jupMesh);
 
-    // 8. SATURN (Ringed Planet with 3D Rings & Cassini Division)
-    const saturnGeo = new THREE.SphereGeometry(0.90, 32, 32);
+    // 8. SATURN (Ringed Jewel - Second Largest Gas Giant)
+    const saturnGeo = new THREE.SphereGeometry(3.6, 32, 32);
     const saturnMat = new THREE.MeshStandardMaterial({ map: texSaturn, roughness: 0.7 });
     const saturnMesh = new THREE.Mesh(saturnGeo, saturnMat);
-    saturnMesh.position.set(5.8, -1.8, 1.5);
+    saturnMesh.position.set(-58, 28, -44);
     saturnMesh.userData = {
       planetData: {
         id: 'saturn',
@@ -509,12 +510,12 @@ export default function Globe3D({
       }
     };
     // 3D Planetary Ring
-    const ringGeo = new THREE.RingGeometry(1.15, 2.15, 64);
+    const ringGeo = new THREE.RingGeometry(4.8, 8.6, 64);
     const ringPos = ringGeo.attributes.position;
     const ringUvs = ringGeo.attributes.uv;
     for (let i = 0; i < ringPos.count; i++) {
       const v = new THREE.Vector2(ringPos.getX(i), ringPos.getY(i));
-      ringUvs.setXY(i, (v.length() - 1.15) / (2.15 - 1.15), 0.5);
+      ringUvs.setXY(i, (v.length() - 4.8) / (8.6 - 4.8), 0.5);
     }
     const ringMat = new THREE.MeshBasicMaterial({
       map: texSaturnRings,
@@ -527,17 +528,17 @@ export default function Globe3D({
     ringMesh.rotation.y = THREE.MathUtils.degToRad(26.7);
     saturnMesh.add(ringMesh);
 
-    const saturnLabel = createBillboardLabel('SATURN ♄', '#facc15', [3.3, 0.85, 1]);
-    saturnLabel.position.set(0, 1.45, 0);
+    const saturnLabel = createBillboardLabel('SATURN ♄', '#facc15', [5.8, 1.45, 1]);
+    saturnLabel.position.set(0, 5.0, 0);
     saturnMesh.add(saturnLabel);
     planetsGroup.add(saturnMesh);
     planetMeshes.push(saturnMesh);
 
     // 9. URANUS (Ice Giant with Faint Vertical Ring)
-    const uranusGeo = new THREE.SphereGeometry(0.65, 28, 28);
+    const uranusGeo = new THREE.SphereGeometry(2.4, 28, 28);
     const uranusMat = new THREE.MeshStandardMaterial({ color: 0x67e8f9, roughness: 0.65 });
     const uranusMesh = new THREE.Mesh(uranusGeo, uranusMat);
-    uranusMesh.position.set(-3.6, -5.6, 0.5);
+    uranusMesh.position.set(64, -28, -38);
     uranusMesh.userData = {
       planetData: {
         id: 'uranus',
@@ -548,23 +549,23 @@ export default function Globe3D({
         diameter: '50,724 km'
       }
     };
-    const uRingGeo = new THREE.RingGeometry(0.85, 1.05, 48);
+    const uRingGeo = new THREE.RingGeometry(3.0, 3.8, 48);
     const uRingMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.35 });
     const uRing = new THREE.Mesh(uRingGeo, uRingMat);
     uRing.rotation.y = Math.PI / 2;
     uranusMesh.add(uRing);
 
-    const uranusLabel = createBillboardLabel('URANUS ♅', '#38bdf8', [3.0, 0.78, 1]);
-    uranusLabel.position.set(0, 1.1, 0);
+    const uranusLabel = createBillboardLabel('URANUS ♅', '#38bdf8', [5.0, 1.25, 1]);
+    uranusLabel.position.set(0, 3.5, 0);
     uranusMesh.add(uranusLabel);
     planetsGroup.add(uranusMesh);
     planetMeshes.push(uranusMesh);
 
     // 10. NEPTUNE (Deep Azure Blue Ice Giant)
-    const nepGeo = new THREE.SphereGeometry(0.62, 28, 28);
+    const nepGeo = new THREE.SphereGeometry(2.3, 28, 28);
     const nepMat = new THREE.MeshStandardMaterial({ color: 0x2563eb, roughness: 0.65 });
     const nepMesh = new THREE.Mesh(nepGeo, nepMat);
-    nepMesh.position.set(2.6, -5.6, 0.5);
+    nepMesh.position.set(-68, 24, 52);
     nepMesh.userData = {
       planetData: {
         id: 'neptune',
@@ -575,17 +576,17 @@ export default function Globe3D({
         diameter: '49,244 km'
       }
     };
-    const nepLabel = createBillboardLabel('NEPTUNE ♆', '#3b82f6', [3.0, 0.78, 1]);
-    nepLabel.position.set(0, 1.05, 0);
+    const nepLabel = createBillboardLabel('NEPTUNE ♆', '#3b82f6', [5.0, 1.25, 1]);
+    nepLabel.position.set(0, 3.4, 0);
     nepMesh.add(nepLabel);
     planetsGroup.add(nepMesh);
     planetMeshes.push(nepMesh);
 
-    // 11. PLUTO (Icy Dwarf Planet)
-    const plutoGeo = new THREE.SphereGeometry(0.30, 18, 18);
+    // 11. PLUTO (Icy Dwarf Planet in Kuiper Belt)
+    const plutoGeo = new THREE.SphereGeometry(0.65, 18, 18);
     const plutoMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.8 });
     const plutoMesh = new THREE.Mesh(plutoGeo, plutoMat);
-    plutoMesh.position.set(4.8, -5.4, 1.0);
+    plutoMesh.position.set(76, 32, 58);
     plutoMesh.userData = {
       planetData: {
         id: 'pluto',
@@ -596,8 +597,8 @@ export default function Globe3D({
         diameter: '2,376 km'
       }
     };
-    const plutoLabel = createBillboardLabel('PLUTO ♇', '#e2e8f0', [2.6, 0.68, 1]);
-    plutoLabel.position.set(0, 0.55, 0);
+    const plutoLabel = createBillboardLabel('PLUTO ♇', '#e2e8f0', [4.0, 1.0, 1]);
+    plutoLabel.position.set(0, 1.2, 0);
     plutoMesh.add(plutoLabel);
     planetsGroup.add(plutoMesh);
     planetMeshes.push(plutoMesh);
@@ -912,7 +913,8 @@ export default function Globe3D({
           if (targetObj) {
             const worldPos = new THREE.Vector3();
             targetObj.getWorldPosition(worldPos);
-            targetCamPosRef.current = new THREE.Vector3(worldPos.x, worldPos.y + 0.6, worldPos.z + 4.5);
+            const pRadius = targetObj.geometry?.parameters?.radius || 3.0;
+            targetCamPosRef.current = new THREE.Vector3(worldPos.x, worldPos.y + pRadius * 0.4, worldPos.z + pRadius * 3.2);
             controls.target.copy(worldPos);
           }
         }
@@ -1021,10 +1023,10 @@ export default function Globe3D({
   useEffect(() => {
     if (!cameraRef.current || !controlsRef.current) return;
     if (cameraMode === 'SOLAR') {
-      targetCamPosRef.current = new THREE.Vector3(0, 0.6, 18.8);
+      targetCamPosRef.current = new THREE.Vector3(0, 24, 70);
       controlsRef.current.target.set(0, 0, 0);
     } else if (cameraMode === 'EARTH') {
-      targetCamPosRef.current = new THREE.Vector3(0, 0, 13.8);
+      targetCamPosRef.current = new THREE.Vector3(0, 0, 14.5);
       controlsRef.current.target.set(0, 0, 0);
     }
   }, [cameraMode]);
