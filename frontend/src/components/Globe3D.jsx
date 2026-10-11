@@ -44,7 +44,7 @@ export default function Globe3D({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.1;
+    renderer.toneMappingExposure = 0.95;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -60,17 +60,19 @@ export default function Globe3D({
     controls.autoRotateSpeed = 0.7;
     controlsRef.current = controls;
 
-    // 4. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    // 4. Natural Lighting (Deep space realistic sun & ambient)
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
-    const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
-    sunLight.position.set(15, 6, 12);
+    // Warm, realistic sunlight
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 1.8);
+    sunLight.position.set(16, 8, 12);
     scene.add(sunLight);
 
-    const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.9);
-    rimLight.position.set(-15, -4, -10);
-    scene.add(rimLight);
+    // Subtle neutral dark-side fill (no blue tint)
+    const spaceFillLight = new THREE.DirectionalLight(0x1e293b, 0.35);
+    spaceFillLight.position.set(-16, -6, -10);
+    scene.add(spaceFillLight);
 
     // 5. Dynamic Starfield (Moves with outer space perspective)
     const starsGeo = new THREE.BufferGeometry();
@@ -108,8 +110,8 @@ export default function Globe3D({
         texture.colorSpace = THREE.SRGBColorSpace;
         const earthMat = new THREE.MeshStandardMaterial({
           map: texture,
-          metalness: 0.1,
-          roughness: 0.7,
+          metalness: 0.0,
+          roughness: 0.85,
         });
         const earthMesh = new THREE.Mesh(earthGeo, earthMat);
         earthGroup.add(earthMesh);
@@ -135,27 +137,16 @@ export default function Globe3D({
       }
     );
 
-    // Atmospheric Glow Halo Mesh
-    const atmosphereGeo = new THREE.SphereGeometry(3.85, 48, 48);
+    // Thin, realistic atmospheric haze hugging Earth's surface (not overly blue)
+    const atmosphereGeo = new THREE.SphereGeometry(3.68, 64, 64);
     const atmosphereMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
+      color: 0x93c5fd,
       transparent: true,
-      opacity: 0.16,
+      opacity: 0.07,
       side: THREE.BackSide
     });
     const atmosphereMesh = new THREE.Mesh(atmosphereGeo, atmosphereMat);
     earthGroup.add(atmosphereMesh);
-
-    // Outer soft blue aura ring
-    const auraGeo = new THREE.RingGeometry(3.9, 4.3, 64);
-    const auraMat = new THREE.MeshBasicMaterial({
-      color: 0x06b6d4,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide
-    });
-    const auraMesh = new THREE.Mesh(auraGeo, auraMat);
-    earthGroup.add(auraMesh);
 
     // 7. Orbits & Satellites Groups (100% Synchronized with Earth Frame)
     const orbitsGroup = new THREE.Group();
