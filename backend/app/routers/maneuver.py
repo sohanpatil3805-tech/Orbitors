@@ -1,12 +1,23 @@
 import decisions
 from fastapi import APIRouter
 
-from app.models.schemas import DecisionRequest, ManeuverOptimizeRequest
+from app.models.schemas import DecisionRequest, ManeuverOptimizeRequest, SpacecraftRequest
 from app.services import live_service, ml_service
 from app.services.common import clean
 from ._errors import run
 
 router = APIRouter(prefix="/maneuver", tags=["Avoidance Maneuver Planner"])
+
+
+@router.get("/spacecraft")
+def get_spacecraft_parameters():
+    return dict(live_service.spacecraft)
+
+
+@router.put("/spacecraft")
+def set_spacecraft_parameters(req: SpacecraftRequest):
+    """Update the mass, Isp and thrust used for every live burn cost estimate."""
+    return live_service.set_spacecraft(req.model_dump())
 
 
 @router.get("/plan/{key}")

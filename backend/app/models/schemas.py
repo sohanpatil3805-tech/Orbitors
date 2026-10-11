@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class WhatIfRequest(BaseModel):
@@ -43,3 +43,12 @@ class ManeuverOptimizeRequest(BaseModel):
     event_id: int
     satellite_mass_kg: Optional[float] = Field(None, gt=0)
     isp_s: Optional[float] = Field(None, gt=0)
+
+
+class SpacecraftRequest(BaseModel):
+    """Spacecraft assumptions used for live burn fuel and duration estimates."""
+    model_config = ConfigDict(allow_inf_nan=False)
+
+    mass_kg: float = Field(..., ge=10, le=500000)
+    isp_s: float = Field(..., ge=50, le=5000)
+    thrust_n: float = Field(..., ge=0.001, le=5000)

@@ -135,13 +135,46 @@ class TestLiveAPI(unittest.TestCase):
         self.assertTrue(any(p["is_option"] for p in curve))
         self.assertLess(curve[-1]["log_pc"], curve[0]["log_pc"])
 
+        # New spacecraft assumptions must update a cached plan's costs without
+        # changing the verified trajectory, and the decision log must agree.
+        spacecraft = self.client.get("/api/maneuver/spacecraft").json()
+        self.addCleanup(live_service.set_spacecraft, spacecraft)
+        changed = {**spacecraft, "mass_kg": spacecraft["mass_kg"] * 2,
+                   "thrust_n": spacecraft["thrust_n"] / 2}
+        res = self.client.put("/api/maneuver/spacecraft", json=changed)
+        self.assertEqual(res.status_code, 200, res.text)
+        updated = self.client.get(f"/api/maneuver/plan/{ev['key']}").json()
+        updated_rec = updated["options"][0]
+        self.assertAlmostEqual(updated_rec["fuel_kg"], rec["fuel_kg"] * 2)
+        self.assertAlmostEqual(updated_rec["burn_duration_s"], rec["burn_duration_s"] * 4)
+        for field in ("dv_ms", "new_miss_km", "new_log_pc", "burn_time_utc"):
+            self.assertEqual(updated_rec[field], rec[field])
+        for old, new in zip(curve, updated["tradeoff_curve"]):
+            self.assertAlmostEqual(new["fuel_kg"], old["fuel_kg"] * 2)
+        higher_isp = {**changed, "isp_s": changed["isp_s"] * 2}
+        self.client.put("/api/maneuver/spacecraft", json=higher_isp)
+        more_efficient = self.client.get(f"/api/maneuver/plan/{ev['key']}").json()["options"][0]
+        self.assertLess(more_efficient["fuel_kg"], updated_rec["fuel_kg"])
+        self.assertEqual(more_efficient["burn_duration_s"], updated_rec["burn_duration_s"])
+
         res = self.client.post("/api/maneuver/decision", json={"key": ev["key"], "decision": "ACCEPTED",
                                                                "option_index": 0, "note": "test"})
         self.assertEqual(res.status_code, 200, res.text)
-        self.assertEqual(self.client.get("/api/maneuver/decisions").json()[0]["decision"], "ACCEPTED")
+        logged = self.client.get("/api/maneuver/decisions").json()[0]
+        self.assertEqual(logged["decision"], "ACCEPTED")
+        self.assertAlmostEqual(logged["option"]["fuel_kg"], more_efficient["fuel_kg"])
+        self.assertAlmostEqual(logged["option"]["burn_duration_s"], more_efficient["burn_duration_s"])
         mitigated = self.client.get("/api/conjunctions/screen", params={"status": "MITIGATED"}).json()
         self.assertEqual(mitigated["conjunctions_count"], 1)
         self.assertEqual(mitigated["conjunctions"][0]["recommended_action"], "MANEUVER_ACCEPTED")
+
+    def test_spacecraft_parameter_validation(self):
+        spacecraft = self.client.get("/api/maneuver/spacecraft").json()
+        for field in ("mass_kg", "isp_s", "thrust_n"):
+            with self.subTest(field=field):
+                res = self.client.put("/api/maneuver/spacecraft", json={**spacecraft, field: 0})
+                self.assertEqual(res.status_code, 422)
+        self.assertEqual(self.client.get("/api/maneuver/spacecraft").json(), spacecraft)
 
 
 @unittest.skipUnless(TEST_DATA_PATH.exists() and TRAIN_DATA_PATH.exists(), "ESA dataset not in Dataset/")

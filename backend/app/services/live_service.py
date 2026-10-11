@@ -14,6 +14,7 @@ import math
 import queue
 import threading
 import time
+from dataclasses import replace
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -24,7 +25,7 @@ import decisions
 from config import (DASHBOARD_REFRESH_INTERVAL, DEFAULT_SPACECRAFT, MANOEUVRE_TARGET_LOG_PC,
                     MANOEUVRE_TARGET_MISS_KM, PROPAGATION_WINDOW_HOURS, RISK_LEVELS)
 from live_pipeline import satellite_status, upcoming, with_decisions
-from manoeuvre_planner import conjunction_key
+from manoeuvre_planner import G0, conjunction_key
 from risk_engine import (STATUS_COLORS, encounter_plane, level_color, log_pc, probability_of_collision,
                          risk_level, risk_status, tle_sigma_m)
 from scenario import THREAT_ID_BASE
@@ -422,14 +423,25 @@ class LiveService:
                     if o.verified_miss_km is not None and o not in options][:6]
         return options
 
-    @staticmethod
-    def option_dict(o, label: str) -> dict:
+    def set_spacecraft(self, spacecraft: dict) -> dict:
+        with self._lock:
+            self.spacecraft = dict(spacecraft)
+            return dict(self.spacecraft)
+
+    def _option_cost(self, dv_ms: float, spacecraft: Optional[dict] = None) -> tuple:
+        sc = spacecraft if spacecraft is not None else self.spacecraft
+        fuel = sc["mass_kg"] * -math.expm1(-dv_ms / (sc["isp_s"] * G0))
+        duration = sc["mass_kg"] * dv_ms / sc["thrust_n"]
+        return fuel, duration
+
+    def option_dict(self, o, label: str, spacecraft: Optional[dict] = None) -> dict:
         miss = o.verified_miss_km if o.verified_miss_km is not None else o.new_miss_km
         lp = o.verified_log_pc if o.verified_log_pc is not None else o.new_log_pc
+        fuel, duration = self._option_cost(o.dv_ms, spacecraft)
         return {"label": label, "mover_id": o.mover_id, "mover_name": o.mover_name, "role": o.role,
                 "burn_time_utc": iso(o.burn_time), "lead_hours": o.lead_hours, "lead_orbits": o.lead_orbits,
                 "direction": o.direction, "dv_ms": o.dv_ms, "dv_rtn_ms": list(o.dv_rtn_ms),
-                "burn_duration_s": o.burn_duration_s, "fuel_kg": o.fuel_kg, "new_miss_km": miss,
+                "burn_duration_s": duration, "fuel_kg": fuel, "new_miss_km": miss,
                 "new_log_pc": lp, "new_level": risk_level(lp), "verified": o.verified_miss_km is not None,
                 "altitude_change_m": o.delta_sma_km * 1000.0, "conflicts": o.conflicts,
                 "conflict_checked": o.conflict_checked, "clean": o.clean}
@@ -437,10 +449,11 @@ class LiveService:
     def plan_view(self, key: str) -> dict:
         row = self._row(key)  # raises KeyError if the conjunction is gone
         entry = self.plans.get(key) or self.enqueue_plan(key)
+        spacecraft = dict(self.spacecraft)
         out = {"key": key, "status": entry["status"], "error": entry.get("error"),
                "conjunction": self.conj_dict(row), "decision": decisions.decision_for(key),
                "target": {"log_pc": MANOEUVRE_TARGET_LOG_PC, "miss_km": MANOEUVRE_TARGET_MISS_KM},
-               "spacecraft": self.spacecraft}
+               "spacecraft": spacecraft}
         if entry["status"] == "queued":
             out["queue_position"] = sum(1 for e in self.plans.values() if e["status"] == "queued")
         if entry["status"] == "ready":
@@ -451,8 +464,9 @@ class LiveService:
             out.update({"summary": plan.summary, "notes": plan.notes,
                         "secondary_manoeuvrable": plan.secondary_manoeuvrable,
                         "secondary_owner": plan.secondary_owner,
-                        "options": [self.option_dict(o, lbl) for o, lbl in zip(options, labels)],
-                        "tradeoff_curve": entry.get("curve", []),
+                        "options": [self.option_dict(o, lbl, spacecraft) for o, lbl in zip(options, labels)],
+                        "tradeoff_curve": [{**p, "fuel_kg": self._option_cost(p["dv_ms"], spacecraft)[0]}
+                                           for p in entry.get("curve", [])],
                         "computed_in_s": entry["finished_at"] - entry["started_at"]})
         return clean(out)
 
@@ -467,6 +481,8 @@ class LiveService:
             if not 0 <= option_index < len(options):
                 raise IndexError(f"option_index must be between 0 and {len(options) - 1}")
             option = options[option_index]
+            fuel, duration = self._option_cost(option.dv_ms)
+            option = replace(option, fuel_kg=fuel, burn_duration_s=duration)
         elif decision == "ACCEPTED":
             raise ValueError("Accepting a plan needs option_index")
         return clean(decisions.record(plan, option, decision, note))

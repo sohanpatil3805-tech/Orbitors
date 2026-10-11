@@ -1,0 +1,196 @@
+.maneuver-page h1 {
+  font-size: clamp(24px, 2.7vw, 40px) !important;
+  line-height: 1.2;
+  background: linear-gradient(100deg, #4dccf5, #7b68ff 60%, #bd64a9);
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.maneuver-spacecraft {
+  margin-bottom: 22px;
+  padding: 16px 20px;
+}
+
+.maneuver-spacecraft summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.maneuver-spacecraft summary::before {
+  content: '›';
+  font-size: 22px;
+  margin-right: 6px;
+}
+
+.maneuver-spacecraft[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.maneuver-spacecraft summary span {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
+.maneuver-spacecraft form {
+  margin-top: 18px;
+}
+
+.maneuver-spacecraft-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+}
+
+.maneuver-spacecraft-fields label {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 150px;
+  font-size: 12px;
+  color: #cbd5e1;
+}
+
+.maneuver-spacecraft-fields input {
+  width: 100%;
+}
+
+.maneuver-spacecraft form p {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 12px 0;
+}
+
+.maneuver-plan {
+  padding: 22px;
+}
+
+.maneuver-conjunction {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 18px 20px;
+  background: linear-gradient(100deg, rgba(190, 24, 93, 0.16), rgba(76, 29, 149, 0.1));
+  border-left: 5px solid #dc2626;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.maneuver-conjunction > span:not(.maneuver-status) {
+  color: #cbd5e1;
+}
+
+.maneuver-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-weight: 800;
+}
+
+.maneuver-status > span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+.maneuver-object-type {
+  font-weight: 400;
+}
+
+.maneuver-conjunction code {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #86d99b;
+  background: rgba(5, 8, 17, 0.65);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+}
+
+.maneuver-suggestion {
+  margin: 16px 0 22px;
+  font-size: 15px;
+  line-height: 1.7;
+  color: #e2e8f0;
+}
+
+.maneuver-table-scroll {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.maneuver-options-table {
+  width: 100%;
+  min-width: 1500px;
+  border-collapse: collapse;
+  background: rgba(5, 8, 17, 0.55);
+  text-align: left;
+  font-size: 12px;
+}
+
+.maneuver-options-table th,
+.maneuver-options-table td {
+  padding: 12px 13px !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+}
+
+.maneuver-options-table th {
+  background: rgba(15, 23, 42, 0.9);
+  font-weight: 500;
+}
+
+.maneuver-options-table tbody tr:hover {
+  background: rgba(56, 189, 248, 0.08) !important;
+}
+
+.maneuver-options-table input {
+  accent-color: #38bdf8;
+}
+
+.maneuver-table-hint {
+  margin-top: 10px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.maneuver-notes {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 24px;
+}
+
+.maneuver-analysis-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.maneuver-page :focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+}
+
+@media (max-width: 900px) {
+  .maneuver-analysis-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .maneuver-plan {
+    padding: 14px;
+  }
+
+  .maneuver-conjunction {
+    padding: 14px;
+  }
+}
