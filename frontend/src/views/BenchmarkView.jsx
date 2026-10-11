@@ -95,10 +95,10 @@ export default function BenchmarkView() {
         </div>
 
         {/* Recall on High-Risk */}
-        <div className="glass-panel" style={{ padding: 16, borderTop: '4px solid #06b6d4' }}>
+        <div className="glass-panel" style={{ padding: 16, borderTop: '4px solid #38bdf8' }}>
           <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4 }}>HIGH-RISK RECALL</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-            <span style={{ fontSize: 28, fontWeight: 800, color: '#06b6d4' }} className="mono">96.4%</span>
+            <span style={{ fontSize: 28, fontWeight: 800, color: '#38bdf8' }} className="mono">96.4%</span>
             <span style={{ fontSize: 12, color: '#94a3b8' }}>target &gt; 95%</span>
           </div>
           <div style={{ fontSize: 11, color: '#38bdf8', marginTop: 4 }}>
@@ -136,7 +136,7 @@ export default function BenchmarkView() {
       <div className="glass-panel" style={{ padding: 22 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <History size={20} color="#06b6d4" />
+            <History size={20} color="#38bdf8" />
             <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#f8fafc' }}>
               Historical ESA Kelvins Real-Event Replay
             </h3>

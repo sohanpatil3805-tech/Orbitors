@@ -2,37 +2,37 @@ export const RISK_TIERS = {
   EXTREME: {
     key: "EXTREME",
     label: "Extreme Risk",
-    color: "#dc2626", // Very dark red
-    glowColor: "rgba(220, 38, 38, 0.8)",
-    badgeBg: "rgba(185, 28, 28, 0.25)",
-    border: "#ef4444",
+    color: "#dc2626", // Deep warning red
+    glowColor: "rgba(0, 0, 0, 0.4)",
+    badgeBg: "rgba(220, 38, 38, 0.12)",
+    border: "rgba(220, 38, 38, 0.3)",
     description: "Collision probability Pc ≥ 1E-4. Immediate operator maneuver decision required."
   },
   HIGH: {
     key: "HIGH",
     label: "High Risk",
-    color: "#f97316", // Orange / Flame
-    glowColor: "rgba(249, 115, 22, 0.8)",
-    badgeBg: "rgba(234, 88, 12, 0.22)",
-    border: "#fb923c",
+    color: "#f97316", // Amber / Flame
+    glowColor: "rgba(0, 0, 0, 0.4)",
+    badgeBg: "rgba(249, 115, 22, 0.12)",
+    border: "rgba(249, 115, 22, 0.3)",
     description: "Close pass (300-600m). Radial covariance narrowing. Prepare contingency burn."
   },
   MEDIUM: {
     key: "MEDIUM",
     label: "Medium Risk",
     color: "#eab308", // Yellow / Warning
-    glowColor: "rgba(234, 179, 8, 0.8)",
-    badgeBg: "rgba(234, 179, 8, 0.22)",
-    border: "#fde047",
+    glowColor: "rgba(0, 0, 0, 0.4)",
+    badgeBg: "rgba(234, 179, 8, 0.12)",
+    border: "rgba(234, 179, 8, 0.3)",
     description: "Pass clearance 1-2 km. Track radar updates on next orbit pass."
   },
   LOW: {
     key: "LOW",
     label: "Low Risk",
     color: "#10b981", // Emerald green
-    glowColor: "rgba(16, 185, 129, 0.8)",
-    badgeBg: "rgba(16, 185, 129, 0.22)",
-    border: "#34d399",
+    glowColor: "rgba(0, 0, 0, 0.4)",
+    badgeBg: "rgba(16, 185, 129, 0.12)",
+    border: "rgba(16, 185, 129, 0.3)",
     description: "Clearance > 4 km. Nominal trajectory with zero threat of conjunction."
   }
 };

@@ -186,7 +186,7 @@ export default function ManeuverView({ event }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div className="glass-panel" style={{ padding: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-              <Crosshair size={18} color="#06b6d4" />
+              <Crosshair size={18} color="#38bdf8" />
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#f8fafc' }}>
                 Interactive Burn Simulator
               </h3>
@@ -207,7 +207,7 @@ export default function ManeuverView({ event }) {
                 step="0.02"
                 value={burnDeltaV}
                 onChange={(e) => setBurnDeltaV(parseFloat(e.target.value))}
-                style={{ width: '100%', accentColor: '#06b6d4' }}
+                style={{ width: '100%', accentColor: '#38bdf8' }}
               />
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#64748b', marginTop: 4 }}>
                 <span>0.0 m/s (Hold)</span>

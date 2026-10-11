@@ -352,25 +352,12 @@ export default function Globe3D({
       satGroup.add(thruster);
 
       // Thruster Core Glow (Risk Color)
+      // Thruster Core Glow (Risk Color)
       const thrusterGlowGeo = new THREE.SphereGeometry(0.035, 8, 8);
       const thrusterGlowMat = new THREE.MeshBasicMaterial({ color: riskColor });
       const thrusterGlow = new THREE.Mesh(thrusterGlowGeo, thrusterGlowMat);
-      thrusterGlow.position.set(0, 0, -0.25);
+      thrusterGlow.position.set(0, 0, -0.20);
       satGroup.add(thrusterGlow);
-
-      // 7. Dynamic Hazard Proximity Ring (All tiers colored per hitting probability)
-      const haloOpacity = sat.risk === 'EXTREME' ? 0.75 : (sat.risk === 'HIGH' ? 0.55 : (sat.risk === 'MEDIUM' ? 0.40 : 0.25));
-      const haloRadius = sat.risk === 'EXTREME' ? [0.78, 0.88] : (sat.risk === 'HIGH' ? [0.70, 0.80] : (sat.risk === 'MEDIUM' ? [0.64, 0.72] : [0.58, 0.66]));
-      const haloGeo = new THREE.RingGeometry(haloRadius[0], haloRadius[1], 36);
-      const haloMat = new THREE.MeshBasicMaterial({
-        color: riskColor,
-        transparent: true,
-        opacity: haloOpacity,
-        side: THREE.DoubleSide
-      });
-      const halo = new THREE.Mesh(haloGeo, haloMat);
-      halo.name = 'halo';
-      satGroup.add(halo);
 
       return satGroup;
     };
@@ -395,7 +382,7 @@ export default function Globe3D({
       const orbitRadius = ORBIT_ALTITUDE_MAP[sat.id] || (EARTH_RADIUS + 1.2 + index * 0.5);
       const incRad = (sat.inclinationDeg * Math.PI) / 180;
 
-      // 3D Orbit Curve
+      // 3D Orbit Curve - Subtle, realistic orbital traces (no neon lasers)
       const points = [];
       const segments = 120;
       for (let i = 0; i <= segments; i++) {
@@ -409,10 +396,12 @@ export default function Globe3D({
       const orbitMat = new THREE.LineBasicMaterial({
         color: new THREE.Color(tier.color),
         transparent: true,
-        opacity: sat.risk === 'EXTREME' ? 0.85 : (sat.risk === 'HIGH' ? 0.65 : 0.35),
-        linewidth: sat.risk === 'EXTREME' ? 2 : 1
+        opacity: sat.risk === 'EXTREME' ? 0.40 : (sat.risk === 'HIGH' ? 0.30 : 0.18),
+        linewidth: 1
       });
       const orbitLine = new THREE.Line(orbitGeo, orbitMat);
+      orbitLine.userData = { satId: sat.id, risk: sat.risk };
+      orbitsGroup.add(orbitLine);
       orbitLine.userData = { satId: sat.id, risk: sat.risk };
       orbitsGroup.add(orbitLine);
 
@@ -528,17 +517,6 @@ export default function Globe3D({
         const nextY = rad * Math.sin(nextAng) * Math.sin(inc);
         const nextZ = rad * Math.sin(nextAng) * Math.cos(inc);
         satGroup.lookAt(nextX, nextY, nextZ);
-
-        // Pulse Hazard Proximity Halo (Billboard oriented towards camera)
-        const halo = satGroup.getObjectByName('halo');
-        if (halo) {
-          const satRisk = satGroup.userData.satData?.risk;
-          const pulseSpeed = satRisk === 'EXTREME' ? 6.0 : 3.5;
-          const pulse = 1.0 + Math.sin(elapsedTime * pulseSpeed) * 0.24;
-          halo.scale.set(pulse, pulse, pulse);
-          // Keep halo facing camera for clear tactical display
-          halo.quaternion.copy(camera.quaternion);
-        }
       });
 
       renderer.render(scene, camera);
@@ -625,11 +603,11 @@ export default function Globe3D({
             borderRadius: '10px',
             background: 'rgba(8, 14, 28, 0.94)',
             backdropFilter: 'blur(12px)',
-            border: `1px solid ${RISK_TIERS[hoveredSat.risk].color}`,
+            border: '1px solid rgba(255, 255, 255, 0.18)',
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            boxShadow: `0 0 25px ${RISK_TIERS[hoveredSat.risk].glowColor}`
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.55)'
           }}
         >
           <span 

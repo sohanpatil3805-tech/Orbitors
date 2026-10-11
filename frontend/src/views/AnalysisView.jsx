@@ -91,7 +91,7 @@ export default function AnalysisView({ event, onNavigateToManeuver }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <BrainCircuit size={24} color="#06b6d4" />
+            <BrainCircuit size={24} color="#38bdf8" />
             <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: '#f8fafc' }}>
               Explainable AI (XAI) & Conjunction Risk Calibration
             </h1>
@@ -129,7 +129,7 @@ export default function AnalysisView({ event, onNavigateToManeuver }) {
         <div className="glass-panel" style={{ padding: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Gauge size={18} color="#06b6d4" />
+              <Gauge size={18} color="#38bdf8" />
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: '#f8fafc' }}>
                 SHAP Driving Factor Attribution
               </h3>
@@ -165,7 +165,7 @@ export default function AnalysisView({ event, onNavigateToManeuver }) {
                       style={{
                         width: `${feat.percentage * 2.5}%`,
                         height: '100%',
-                        background: isRiskIncrease ? 'linear-gradient(90deg, #f97316, #dc2626)' : 'linear-gradient(90deg, #06b6d4, #10b981)',
+                        background: isRiskIncrease ? 'linear-gradient(90deg, #f97316, #dc2626)' : 'linear-gradient(90deg, #38bdf8, #10b981)',
                         borderRadius: 3
                       }}
                     />
@@ -184,7 +184,7 @@ export default function AnalysisView({ event, onNavigateToManeuver }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           
           {/* Mission Telemetry Readout (Slide 13 of Problem Statement) */}
-          <div className="glass-panel" style={{ padding: 18, borderLeft: '4px solid #06b6d4' }}>
+          <div className="glass-panel" style={{ padding: 18, borderLeft: '4px solid #38bdf8' }}>
             <h3 style={{ fontSize: 14, fontWeight: 700, margin: '0 0 10px', color: '#f8fafc' }}>
               OPERATIONAL TELEMETRY READOUT
             </h3>
@@ -193,7 +193,7 @@ export default function AnalysisView({ event, onNavigateToManeuver }) {
               <div style={{ background: 'rgba(220, 38, 38, 0.1)', padding: 10, borderRadius: 6, border: '1px solid rgba(220,38,38,0.3)', color: '#fca5a5' }}>
                 <strong>[ALERT]:</strong> Calibrated PoC ({simulatedPoc}) {isCritical ? 'crosses 1E-4 critical limit.' : 'remains below critical threshold.'} Miss distance: {missDist.toFixed(1)}m.
               </div>
-              <div style={{ background: 'rgba(6, 182, 212, 0.1)', padding: 10, borderRadius: 6, border: '1px solid rgba(6,182,212,0.3)', color: '#7dd3fc' }}>
+              <div style={{ background: 'rgba(56, 189, 248, 0.08)', padding: 10, borderRadius: 6, border: '1px solid rgba(56, 189, 248, 0.25)', color: '#7dd3fc' }}>
                 <strong>[DIAGNOSTIC]:</strong> Radial uncertainty narrowed to {radialCov.toFixed(0)}m. Solar weather F10.7={solarFlux.toFixed(0)}.
               </div>
               <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: 10, borderRadius: 6, border: '1px solid rgba(16,185,129,0.3)', color: '#6ee7b7' }}>
@@ -205,7 +205,7 @@ export default function AnalysisView({ event, onNavigateToManeuver }) {
           {/* Interactive Feature Tuner */}
           <div className="glass-panel" style={{ padding: 18 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <Sliders size={16} color="#06b6d4" />
+              <Sliders size={16} color="#38bdf8" />
               <h3 style={{ fontSize: 14, fontWeight: 700, margin: 0, color: '#f8fafc' }}>
                 Live Conjunction Feature Tuner
               </h3>
@@ -225,7 +225,7 @@ export default function AnalysisView({ event, onNavigateToManeuver }) {
                   step="10"
                   value={missDist}
                   onChange={(e) => setMissDist(parseFloat(e.target.value))}
-                  style={{ width: '100%', accentColor: '#06b6d4' }}
+                  style={{ width: '100%', accentColor: '#38bdf8' }}
                 />
               </div>
 

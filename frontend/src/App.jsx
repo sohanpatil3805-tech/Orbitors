@@ -109,11 +109,12 @@ export default function App() {
               width: 36,
               height: 36,
               borderRadius: 9,
-              background: 'linear-gradient(135deg, #0284c7, #06b6d4)',
+              background: '#0f172a',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 0 16px rgba(6, 182, 212, 0.4)'
+              boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)'
             }}
           >
             <Satellite size={20} color="#ffffff" />
@@ -121,7 +122,7 @@ export default function App() {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '0.08em', color: '#f8fafc' }}>
-                ORBITGUARD<span style={{ color: '#06b6d4' }}>.AI</span>
+                ORBITGUARD<span style={{ color: '#38bdf8' }}>.AI</span>
               </span>
               <span 
                 style={{
@@ -129,12 +130,12 @@ export default function App() {
                   fontWeight: 700,
                   padding: '2px 5px',
                   borderRadius: 4,
-                  background: 'rgba(6, 182, 212, 0.15)',
-                  color: '#06b6d4',
-                  border: '1px solid rgba(6, 182, 212, 0.3)'
+                  background: 'rgba(255, 255, 255, 0.06)',
+                  color: '#94a3b8',
+                  border: '1px solid rgba(255, 255, 255, 0.12)'
                 }}
               >
-                HACKATHON 1C
+                MISSION CONTROL
               </span>
             </div>
           </div>
@@ -150,9 +151,9 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: currentView === 'HOME' ? 'rgba(6, 182, 212, 0.2)' : 'transparent',
-              border: currentView === 'HOME' ? '1px solid #06b6d4' : '1px solid transparent',
-              color: currentView === 'HOME' ? '#38bdf8' : '#94a3b8',
+              background: currentView === 'HOME' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+              border: currentView === 'HOME' ? '1px solid rgba(255, 255, 255, 0.22)' : '1px solid transparent',
+              color: currentView === 'HOME' ? '#f8fafc' : '#94a3b8',
               padding: '6px 12px',
               borderRadius: 8,
               fontSize: 12,
@@ -172,9 +173,9 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: currentView === 'SCREENING' ? 'rgba(6, 182, 212, 0.2)' : 'transparent',
-              border: currentView === 'SCREENING' ? '1px solid #06b6d4' : '1px solid transparent',
-              color: currentView === 'SCREENING' ? '#38bdf8' : '#94a3b8',
+              background: currentView === 'SCREENING' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+              border: currentView === 'SCREENING' ? '1px solid rgba(255, 255, 255, 0.22)' : '1px solid transparent',
+              color: currentView === 'SCREENING' ? '#f8fafc' : '#94a3b8',
               padding: '6px 12px',
               borderRadius: 8,
               fontSize: 12,
@@ -194,9 +195,9 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: currentView === 'ANALYSIS' ? 'rgba(6, 182, 212, 0.2)' : 'transparent',
-              border: currentView === 'ANALYSIS' ? '1px solid #06b6d4' : '1px solid transparent',
-              color: currentView === 'ANALYSIS' ? '#38bdf8' : '#94a3b8',
+              background: currentView === 'ANALYSIS' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+              border: currentView === 'ANALYSIS' ? '1px solid rgba(255, 255, 255, 0.22)' : '1px solid transparent',
+              color: currentView === 'ANALYSIS' ? '#f8fafc' : '#94a3b8',
               padding: '6px 12px',
               borderRadius: 8,
               fontSize: 12,
@@ -216,9 +217,9 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: currentView === 'MANEUVER' ? 'rgba(249, 115, 22, 0.2)' : 'transparent',
-              border: currentView === 'MANEUVER' ? '1px solid #f97316' : '1px solid transparent',
-              color: currentView === 'MANEUVER' ? '#fb923c' : '#94a3b8',
+              background: currentView === 'MANEUVER' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+              border: currentView === 'MANEUVER' ? '1px solid rgba(255, 255, 255, 0.22)' : '1px solid transparent',
+              color: currentView === 'MANEUVER' ? '#f8fafc' : '#94a3b8',
               padding: '6px 12px',
               borderRadius: 8,
               fontSize: 12,
@@ -238,9 +239,9 @@ export default function App() {
               display: 'flex',
               alignItems: 'center',
               gap: 6,
-              background: currentView === 'BENCHMARK' ? 'rgba(250, 204, 21, 0.2)' : 'transparent',
-              border: currentView === 'BENCHMARK' ? '1px solid #facc15' : '1px solid transparent',
-              color: currentView === 'BENCHMARK' ? '#facc15' : '#94a3b8',
+              background: currentView === 'BENCHMARK' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+              border: currentView === 'BENCHMARK' ? '1px solid rgba(255, 255, 255, 0.22)' : '1px solid transparent',
+              color: currentView === 'BENCHMARK' ? '#f8fafc' : '#94a3b8',
               padding: '6px 12px',
               borderRadius: 8,
               fontSize: 12,
@@ -256,7 +257,7 @@ export default function App() {
 
         {/* UTC Mission Clock */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94a3b8', fontSize: 11 }} className="mono">
-          <Clock size={13} color="#06b6d4" />
+          <Clock size={13} color="#94a3b8" />
           <span>{utcTime || 'UTC 00:00:00'}</span>
         </div>
       </header>
@@ -416,7 +417,7 @@ export default function App() {
               zIndex: 35,
               background: 'rgba(8, 14, 28, 0.9)',
               border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#38bdf8',
+              color: '#94a3b8',
               width: 32,
               height: 32,
               borderRadius: 8,
@@ -510,9 +511,9 @@ export default function App() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        borderColor: isSelected ? tier.color : 'rgba(255, 255, 255, 0.08)',
-                        background: isSelected ? tier.badgeBg : 'rgba(13, 22, 42, 0.65)',
-                        boxShadow: isSelected ? `0 0 12px ${tier.glowColor}` : 'none'
+                        borderColor: isSelected ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.08)',
+                        background: isSelected ? 'rgba(255, 255, 255, 0.08)' : 'rgba(13, 22, 42, 0.65)',
+                        boxShadow: 'none'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -521,8 +522,7 @@ export default function App() {
                             width: 8,
                             height: 8,
                             borderRadius: '50%',
-                            backgroundColor: tier.color,
-                            boxShadow: `0 0 6px ${tier.color}`
+                            backgroundColor: tier.color
                           }}
                           className={sat.risk === 'EXTREME' ? 'pulse-extreme' : ''}
                         />
@@ -717,9 +717,9 @@ export default function App() {
                   }}
                   style={{
                     flex: 1,
-                    background: 'rgba(6, 182, 212, 0.15)',
-                    border: '1px solid #06b6d4',
-                    color: '#38bdf8',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.18)',
+                    color: '#f8fafc',
                     padding: '8px 10px',
                     borderRadius: 6,
                     fontSize: 11,
@@ -775,9 +775,9 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                background: autoRotate ? 'rgba(6, 182, 212, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                border: autoRotate ? '1px solid #06b6d4' : '1px solid rgba(255, 255, 255, 0.1)',
-                color: autoRotate ? '#38bdf8' : '#94a3b8',
+                background: autoRotate ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                border: autoRotate ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.08)',
+                color: autoRotate ? '#f8fafc' : '#94a3b8',
                 padding: '6px 12px',
                 borderRadius: 6,
                 fontSize: 11,
@@ -795,9 +795,9 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6,
-                background: showOrbits ? 'rgba(6, 182, 212, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-                border: showOrbits ? '1px solid #06b6d4' : '1px solid rgba(255, 255, 255, 0.1)',
-                color: showOrbits ? '#38bdf8' : '#94a3b8',
+                background: showOrbits ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.04)',
+                border: showOrbits ? '1px solid rgba(255, 255, 255, 0.25)' : '1px solid rgba(255, 255, 255, 0.08)',
+                color: showOrbits ? '#f8fafc' : '#94a3b8',
                 padding: '6px 12px',
                 borderRadius: 6,
                 fontSize: 11,

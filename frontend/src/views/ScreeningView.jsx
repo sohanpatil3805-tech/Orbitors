@@ -151,7 +151,7 @@ export default function ScreeningView({ onSelectSatelliteForAnalysis, onSelectSa
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Radar size={24} color="#06b6d4" />
+            <Radar size={24} color="#38bdf8" />
             <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: '#f8fafc' }}>
               72-Hour Conjunction Screening Telemetry
             </h1>
@@ -220,10 +220,10 @@ export default function ScreeningView({ onSelectSatelliteForAnalysis, onSelectSa
                 onClick={() => setRiskFilter(risk)}
                 style={{
                   background: isSelected 
-                    ? (tier ? tier.badgeBg : 'rgba(6, 182, 212, 0.2)') 
+                    ? (tier ? tier.badgeBg : 'rgba(255, 255, 255, 0.15)') 
                     : 'rgba(255, 255, 255, 0.04)',
                   border: isSelected 
-                    ? `1px solid ${tier ? tier.border : '#06b6d4'}` 
+                    ? `1px solid ${tier ? tier.border : 'rgba(255, 255, 255, 0.3)'}` 
                     : '1px solid rgba(255, 255, 255, 0.08)',
                   color: isSelected ? '#ffffff' : '#94a3b8',
                   padding: '5px 12px',
@@ -331,9 +331,9 @@ export default function ScreeningView({ onSelectSatelliteForAnalysis, onSelectSa
                       <button
                         onClick={() => onSelectSatelliteForAnalysis(ev)}
                         style={{
-                          background: 'rgba(6, 182, 212, 0.15)',
-                          border: '1px solid #06b6d4',
-                          color: '#38bdf8',
+                          background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.2)',
+                          color: '#f8fafc',
                           padding: '4px 8px',
                           borderRadius: 4,
                           fontSize: 11,
