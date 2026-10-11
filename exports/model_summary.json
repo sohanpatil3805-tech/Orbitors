@@ -1,0 +1,657 @@
+{
+  "generated_at": "2026-10-11T04:23:20.558093+00:00",
+  "model": "XGBoost regressor \u2014 target: risk (log10 collision probability)",
+  "sampled": false,
+  "rows": {
+    "train": 138448,
+    "val": 24186,
+    "test": 24484
+  },
+  "n_features": 118,
+  "feature_names": [
+    "time_to_tca",
+    "max_risk_estimate",
+    "max_risk_scaling",
+    "miss_distance",
+    "relative_speed",
+    "relative_position_r",
+    "relative_position_t",
+    "relative_position_n",
+    "relative_velocity_r",
+    "relative_velocity_t",
+    "relative_velocity_n",
+    "t_time_lastob_start",
+    "t_time_lastob_end",
+    "t_recommended_od_span",
+    "t_actual_od_span",
+    "t_obs_available",
+    "t_obs_used",
+    "t_residuals_accepted",
+    "t_weighted_rms",
+    "t_rcs_estimate",
+    "t_cd_area_over_mass",
+    "t_cr_area_over_mass",
+    "t_sedr",
+    "t_j2k_sma",
+    "t_j2k_ecc",
+    "t_j2k_inc",
+    "t_ct_r",
+    "t_cn_r",
+    "t_cn_t",
+    "t_crdot_r",
+    "t_crdot_t",
+    "t_crdot_n",
+    "t_ctdot_r",
+    "t_ctdot_t",
+    "t_ctdot_n",
+    "t_ctdot_rdot",
+    "t_cndot_r",
+    "t_cndot_t",
+    "t_cndot_n",
+    "t_cndot_rdot",
+    "t_cndot_tdot",
+    "c_object_type",
+    "c_time_lastob_start",
+    "c_time_lastob_end",
+    "c_recommended_od_span",
+    "c_actual_od_span",
+    "c_obs_available",
+    "c_obs_used",
+    "c_residuals_accepted",
+    "c_weighted_rms",
+    "c_rcs_estimate",
+    "c_cd_area_over_mass",
+    "c_cr_area_over_mass",
+    "c_sedr",
+    "c_j2k_sma",
+    "c_j2k_ecc",
+    "c_j2k_inc",
+    "c_ct_r",
+    "c_cn_r",
+    "c_cn_t",
+    "c_crdot_r",
+    "c_crdot_t",
+    "c_crdot_n",
+    "c_ctdot_r",
+    "c_ctdot_t",
+    "c_ctdot_n",
+    "c_ctdot_rdot",
+    "c_cndot_r",
+    "c_cndot_t",
+    "c_cndot_n",
+    "c_cndot_rdot",
+    "c_cndot_tdot",
+    "t_span",
+    "c_span",
+    "t_h_apo",
+    "t_h_per",
+    "c_h_apo",
+    "c_h_per",
+    "geocentric_latitude",
+    "azimuth",
+    "elevation",
+    "mahalanobis_distance",
+    "t_position_covariance_det",
+    "c_position_covariance_det",
+    "t_sigma_r",
+    "c_sigma_r",
+    "t_sigma_t",
+    "c_sigma_t",
+    "t_sigma_n",
+    "c_sigma_n",
+    "t_sigma_rdot",
+    "c_sigma_rdot",
+    "t_sigma_tdot",
+    "c_sigma_tdot",
+    "t_sigma_ndot",
+    "c_sigma_ndot",
+    "F10",
+    "F3M",
+    "SSN",
+    "AP",
+    "relative_position_magnitude",
+    "relative_velocity_magnitude",
+    "log_time_to_tca",
+    "time_to_tca_hours",
+    "time_to_tca_squared",
+    "t_position_uncertainty",
+    "c_position_uncertainty",
+    "combined_uncertainty",
+    "delta_sma",
+    "delta_ecc",
+    "delta_inc",
+    "t_altitude_avg",
+    "c_altitude_avg",
+    "t_obs_ratio",
+    "c_obs_ratio",
+    "log_mahalanobis",
+    "log_miss_distance",
+    "risk_scaling_ratio"
+  ],
+  "training_metrics": {
+    "train_rmse": 0.0824483371046755,
+    "val_rmse": 0.16032128296605336,
+    "train_mae": 0.05177885041992075,
+    "val_mae": 0.07879862470318615,
+    "train_r2": 0.9999321660263305,
+    "val_r2": 0.9997438745478441,
+    "training_time_seconds": 3.418196201324463,
+    "n_estimators_used": 362,
+    "device": "cuda",
+    "test_rmse": 0.15141202648740637,
+    "test_mae": 0.08887360409065721,
+    "test_r2": 0.9997635463712616,
+    "test_alert_threshold": -4.5,
+    "test_alert_positives_true": 556,
+    "test_alert_positives_pred": 546,
+    "test_alert_precision": 0.9706959706959707,
+    "test_alert_recall": 0.9532374100719424,
+    "test_alert_f1": 0.9618874773139746,
+    "n_train_rows": 138448,
+    "n_val_rows": 24186,
+    "n_test_rows": 24484
+  },
+  "feature_importance_gain": [
+    {
+      "feature": "max_risk_scaling",
+      "importance": 19475.880859375
+    },
+    {
+      "feature": "risk_scaling_ratio",
+      "importance": 13943.568359375
+    },
+    {
+      "feature": "combined_uncertainty",
+      "importance": 2243.32666015625
+    },
+    {
+      "feature": "t_altitude_avg",
+      "importance": 675.964111328125
+    },
+    {
+      "feature": "mahalanobis_distance",
+      "importance": 488.5904846191406
+    },
+    {
+      "feature": "c_position_uncertainty",
+      "importance": 283.3597106933594
+    },
+    {
+      "feature": "max_risk_estimate",
+      "importance": 266.8223876953125
+    },
+    {
+      "feature": "c_time_lastob_end",
+      "importance": 192.85337829589844
+    },
+    {
+      "feature": "relative_position_r",
+      "importance": 123.13587951660156
+    },
+    {
+      "feature": "relative_position_magnitude",
+      "importance": 122.88601684570312
+    },
+    {
+      "feature": "t_j2k_sma",
+      "importance": 121.32771301269531
+    },
+    {
+      "feature": "c_time_lastob_start",
+      "importance": 112.55298614501953
+    },
+    {
+      "feature": "c_sigma_t",
+      "importance": 98.24846649169922
+    },
+    {
+      "feature": "c_sigma_tdot",
+      "importance": 94.89429473876953
+    },
+    {
+      "feature": "miss_distance",
+      "importance": 93.51114654541016
+    },
+    {
+      "feature": "relative_velocity_magnitude",
+      "importance": 83.57501220703125
+    },
+    {
+      "feature": "t_obs_used",
+      "importance": 80.1287612915039
+    },
+    {
+      "feature": "relative_velocity_t",
+      "importance": 75.4885025024414
+    },
+    {
+      "feature": "c_h_apo",
+      "importance": 71.38394165039062
+    },
+    {
+      "feature": "relative_speed",
+      "importance": 56.12000274658203
+    },
+    {
+      "feature": "c_position_covariance_det",
+      "importance": 52.55582809448242
+    },
+    {
+      "feature": "t_span",
+      "importance": 52.031246185302734
+    },
+    {
+      "feature": "t_position_uncertainty",
+      "importance": 39.2780876159668
+    },
+    {
+      "feature": "c_ctdot_rdot",
+      "importance": 35.2680778503418
+    },
+    {
+      "feature": "c_sigma_n",
+      "importance": 24.64042091369629
+    },
+    {
+      "feature": "t_rcs_estimate",
+      "importance": 23.59306526184082
+    },
+    {
+      "feature": "c_sigma_ndot",
+      "importance": 20.550334930419922
+    },
+    {
+      "feature": "t_sigma_t",
+      "importance": 18.758575439453125
+    },
+    {
+      "feature": "c_sigma_r",
+      "importance": 15.237998962402344
+    },
+    {
+      "feature": "t_h_per",
+      "importance": 15.204976081848145
+    },
+    {
+      "feature": "time_to_tca",
+      "importance": 14.94079303741455
+    },
+    {
+      "feature": "t_cndot_t",
+      "importance": 12.072237014770508
+    },
+    {
+      "feature": "c_cd_area_over_mass",
+      "importance": 12.063189506530762
+    },
+    {
+      "feature": "t_sedr",
+      "importance": 11.068107604980469
+    },
+    {
+      "feature": "c_ct_r",
+      "importance": 10.973566055297852
+    },
+    {
+      "feature": "c_span",
+      "importance": 10.122002601623535
+    },
+    {
+      "feature": "c_sedr",
+      "importance": 8.702892303466797
+    },
+    {
+      "feature": "c_ctdot_t",
+      "importance": 7.984631538391113
+    },
+    {
+      "feature": "t_obs_available",
+      "importance": 7.67756986618042
+    },
+    {
+      "feature": "t_sigma_ndot",
+      "importance": 7.011045932769775
+    },
+    {
+      "feature": "relative_velocity_n",
+      "importance": 6.958693981170654
+    },
+    {
+      "feature": "c_actual_od_span",
+      "importance": 6.908556938171387
+    },
+    {
+      "feature": "t_residuals_accepted",
+      "importance": 6.474257469177246
+    },
+    {
+      "feature": "log_mahalanobis",
+      "importance": 6.268542289733887
+    },
+    {
+      "feature": "relative_position_n",
+      "importance": 6.021461486816406
+    },
+    {
+      "feature": "c_j2k_sma",
+      "importance": 5.937401294708252
+    },
+    {
+      "feature": "c_ctdot_n",
+      "importance": 5.792872428894043
+    },
+    {
+      "feature": "c_ctdot_r",
+      "importance": 5.191736698150635
+    },
+    {
+      "feature": "c_recommended_od_span",
+      "importance": 4.94111967086792
+    },
+    {
+      "feature": "c_obs_available",
+      "importance": 4.866298198699951
+    },
+    {
+      "feature": "geocentric_latitude",
+      "importance": 4.207173824310303
+    },
+    {
+      "feature": "c_cn_r",
+      "importance": 4.09572172164917
+    },
+    {
+      "feature": "t_h_apo",
+      "importance": 4.057876110076904
+    },
+    {
+      "feature": "t_recommended_od_span",
+      "importance": 3.6947171688079834
+    },
+    {
+      "feature": "t_ct_r",
+      "importance": 3.6553280353546143
+    },
+    {
+      "feature": "c_cndot_t",
+      "importance": 3.6297426223754883
+    },
+    {
+      "feature": "c_sigma_rdot",
+      "importance": 3.566561698913574
+    },
+    {
+      "feature": "c_j2k_ecc",
+      "importance": 3.5395541191101074
+    },
+    {
+      "feature": "c_obs_used",
+      "importance": 3.4061367511749268
+    },
+    {
+      "feature": "delta_sma",
+      "importance": 3.3050827980041504
+    },
+    {
+      "feature": "c_h_per",
+      "importance": 3.294363021850586
+    },
+    {
+      "feature": "delta_inc",
+      "importance": 3.0531511306762695
+    },
+    {
+      "feature": "c_j2k_inc",
+      "importance": 2.983489513397217
+    },
+    {
+      "feature": "azimuth",
+      "importance": 2.8158912658691406
+    },
+    {
+      "feature": "t_position_covariance_det",
+      "importance": 2.785926580429077
+    },
+    {
+      "feature": "c_weighted_rms",
+      "importance": 2.6825037002563477
+    },
+    {
+      "feature": "t_j2k_inc",
+      "importance": 2.644258737564087
+    },
+    {
+      "feature": "c_cndot_r",
+      "importance": 2.6066689491271973
+    },
+    {
+      "feature": "c_cndot_n",
+      "importance": 2.2904469966888428
+    },
+    {
+      "feature": "elevation",
+      "importance": 2.2195963859558105
+    },
+    {
+      "feature": "c_altitude_avg",
+      "importance": 2.1215014457702637
+    },
+    {
+      "feature": "t_j2k_ecc",
+      "importance": 1.96263587474823
+    },
+    {
+      "feature": "delta_ecc",
+      "importance": 1.9437907934188843
+    },
+    {
+      "feature": "c_cndot_rdot",
+      "importance": 1.934938907623291
+    },
+    {
+      "feature": "c_rcs_estimate",
+      "importance": 1.9133145809173584
+    },
+    {
+      "feature": "log_miss_distance",
+      "importance": 1.752632737159729
+    },
+    {
+      "feature": "t_cd_area_over_mass",
+      "importance": 1.7096264362335205
+    },
+    {
+      "feature": "relative_position_t",
+      "importance": 1.6461049318313599
+    },
+    {
+      "feature": "c_residuals_accepted",
+      "importance": 1.5615988969802856
+    },
+    {
+      "feature": "time_to_tca_hours",
+      "importance": 1.5564191341400146
+    },
+    {
+      "feature": "t_ctdot_t",
+      "importance": 1.481999158859253
+    },
+    {
+      "feature": "t_sigma_rdot",
+      "importance": 1.4101758003234863
+    },
+    {
+      "feature": "c_crdot_r",
+      "importance": 1.3943891525268555
+    },
+    {
+      "feature": "c_cndot_tdot",
+      "importance": 1.3646819591522217
+    },
+    {
+      "feature": "log_time_to_tca",
+      "importance": 1.2617920637130737
+    },
+    {
+      "feature": "c_crdot_t",
+      "importance": 1.239272952079773
+    },
+    {
+      "feature": "t_cndot_tdot",
+      "importance": 1.112838625907898
+    },
+    {
+      "feature": "c_cr_area_over_mass",
+      "importance": 1.0301661491394043
+    },
+    {
+      "feature": "t_crdot_t",
+      "importance": 0.9517064690589905
+    },
+    {
+      "feature": "t_ctdot_rdot",
+      "importance": 0.913582980632782
+    },
+    {
+      "feature": "t_actual_od_span",
+      "importance": 0.827849805355072
+    },
+    {
+      "feature": "t_sigma_n",
+      "importance": 0.8226467967033386
+    },
+    {
+      "feature": "t_sigma_r",
+      "importance": 0.7525504231452942
+    },
+    {
+      "feature": "t_cr_area_over_mass",
+      "importance": 0.6981554627418518
+    },
+    {
+      "feature": "t_crdot_n",
+      "importance": 0.6739232540130615
+    },
+    {
+      "feature": "F3M",
+      "importance": 0.6551279425621033
+    },
+    {
+      "feature": "t_cndot_r",
+      "importance": 0.5884981155395508
+    },
+    {
+      "feature": "t_sigma_tdot",
+      "importance": 0.564254105091095
+    },
+    {
+      "feature": "t_crdot_r",
+      "importance": 0.5538023710250854
+    },
+    {
+      "feature": "t_weighted_rms",
+      "importance": 0.5360344052314758
+    },
+    {
+      "feature": "c_obs_ratio",
+      "importance": 0.53447026014328
+    },
+    {
+      "feature": "t_ctdot_r",
+      "importance": 0.525113046169281
+    },
+    {
+      "feature": "t_cndot_n",
+      "importance": 0.5144515037536621
+    },
+    {
+      "feature": "t_obs_ratio",
+      "importance": 0.5041507482528687
+    },
+    {
+      "feature": "c_cn_t",
+      "importance": 0.5011444687843323
+    },
+    {
+      "feature": "SSN",
+      "importance": 0.4669710695743561
+    },
+    {
+      "feature": "c_crdot_n",
+      "importance": 0.4580039381980896
+    },
+    {
+      "feature": "t_cn_r",
+      "importance": 0.4388101100921631
+    },
+    {
+      "feature": "t_cn_t",
+      "importance": 0.43880707025527954
+    },
+    {
+      "feature": "relative_velocity_r",
+      "importance": 0.4002768099308014
+    },
+    {
+      "feature": "t_ctdot_n",
+      "importance": 0.39943185448646545
+    },
+    {
+      "feature": "AP",
+      "importance": 0.3931591510772705
+    },
+    {
+      "feature": "c_object_type",
+      "importance": 0.3902713656425476
+    },
+    {
+      "feature": "F10",
+      "importance": 0.37891465425491333
+    },
+    {
+      "feature": "t_cndot_rdot",
+      "importance": 0.34636807441711426
+    }
+  ],
+  "risk_levels": {
+    "thresholds_log10_pc": {
+      "CRITICAL": -3.0,
+      "HIGH": -4.5,
+      "MEDIUM": -6.0,
+      "LOW": -7.5,
+      "NEGLIGIBLE": null
+    },
+    "train": {
+      "actual": {
+        "CRITICAL": 52,
+        "HIGH": 1646,
+        "MEDIUM": 8485,
+        "LOW": 16886,
+        "NEGLIGIBLE": 135565
+      },
+      "predicted": {
+        "CRITICAL": 38,
+        "HIGH": 1665,
+        "MEDIUM": 8389,
+        "LOW": 16909,
+        "NEGLIGIBLE": 135633
+      }
+    },
+    "test": {
+      "actual": {
+        "CRITICAL": 33,
+        "HIGH": 523,
+        "MEDIUM": 2707,
+        "LOW": 2986,
+        "NEGLIGIBLE": 18235
+      },
+      "predicted": {
+        "CRITICAL": 7,
+        "HIGH": 539,
+        "MEDIUM": 2671,
+        "LOW": 3022,
+        "NEGLIGIBLE": 18245
+      }
+    }
+  }
+}
