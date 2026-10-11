@@ -20,6 +20,7 @@ from sklearn.metrics import (
     precision_score,
     recall_score,
     f1_score,
+    fbeta_score,
 )
 
 from config import (
@@ -252,6 +253,8 @@ def alert_metrics(y_true: np.ndarray, y_pred: np.ndarray, threshold: float = RIS
         "alert_precision": float(precision_score(t, p, zero_division=0)),
         "alert_recall": float(recall_score(t, p, zero_division=0)),
         "alert_f1": float(f1_score(t, p, zero_division=0)),
+        # F2 weights recall over precision; it was the ESA Kelvins challenge's alert metric
+        "alert_f2": float(fbeta_score(t, p, beta=2, zero_division=0)),
         "alert_accuracy": float((t == p).mean()),
     }
 

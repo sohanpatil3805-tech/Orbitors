@@ -19,7 +19,8 @@ OrbitGuard AI screens important satellites against the whole tracked catalogue e
 | **Operator decisions** | Accept / decline each suggestion; logged as an audit trail and drawn on the 3D view |
 | **Risk-coloured 3D view** | 🔴 red glowing path = danger · 🟠 orange = review · ⚪ white = safe · 🟢 dashed = accepted burn |
 | **Auto-refresh** | Re-checks every 5 min; new orbit data (every 2 h) triggers re-screening — no clicking needed |
-| **Validation suite** | 13 checks against independent references + 12 offline unit tests |
+| **Validation suite** | 13 checks against independent references + 14 offline unit tests + 8 end-to-end API tests |
+| **Web app** | FastAPI backend + React/Three.js site over the same engine: live globe, screening, SHAP, planner, ESA replay |
 | **SHAP explainability** | Why the full-CDM model predicts a given risk |
 
 ---
@@ -59,12 +60,19 @@ OrbitGuard AI
 ├── tests/                    # Fast offline unit tests
 ├── assets/earth_texture.jpg  # Blue Marble texture for the 3D globe (from frontend/public)
 ├── .streamlit/config.toml    # Dashboard theme
-├── backend/                  # FastAPI service (separate app; run from backend/: python run.py)
-├── frontend/                 # React frontend
-├── Dataset/                  # ESA CDM train/test CSVs (git-ignored)
+├── backend/                  # FastAPI API over the same engine (python backend/run.py → :8000/docs)
+│   ├── app/services/         #   live_service (screening, planner, decisions), ml_service (CDM model,
+│   │                         #   SHAP, ESA replay), benchmark_service (saved evaluation files)
+│   └── test_api.py           #   end-to-end API tests, offline (real models + dataset)
+├── frontend/                 # React + Three.js mission-control site; Vite proxies /api to the backend
+├── Dataset/                  # ESA CDM train/test CSVs (git-ignored — see Dataset/README.md)
 ├── models/                   # Trained models (CDM model + models/uncertainty/)
 └── exports/                  # JSON exports + validation report
 ```
+
+The Streamlit dashboard and the web app (FastAPI + React) are two front ends to the same engine: both screen
+with `live_pipeline.py`, assess with `risk_engine.py`, plan with `manoeuvre_planner.py` and log decisions to the
+same `logs/manoeuvre_decisions.jsonl`.
 
 ---
 
@@ -72,8 +80,13 @@ OrbitGuard AI
 
 ### 1. Install dependencies
 ```bash
-pip install -r requirements.txt
+pip install -r backend/requirements.txt   # engine + dashboard + API (includes requirements.txt)
+cd frontend && npm install && cd ..       # web front end
 ```
+
+### 1b. Get the dataset (needed for training, validation, SHAP pages and ESA replays)
+Download `train_data.zip` and `test_data.csv` from the [ESA Kelvins data page](https://kelvins.esa.int/collision-avoidance-challenge/data/)
+and put `train_data.csv` and `test_data.csv` in `Dataset/`. Live screening works without them.
 
 ### 2. (Optional) Connect Space-Track
 Create a free account at [space-track.org](https://www.space-track.org/auth/createAccount), copy `.env.example` to `.env` and fill in your login. `.env` is git-ignored. Without it the app uses CelesTrak.
@@ -91,9 +104,29 @@ streamlit run dashboard.py     # or: python -m streamlit run dashboard.py
 ```
 The first load screens the watchlist (about a minute); later loads use the cache until new orbit data arrives.
 
+### 4b. Or launch the web app (two terminals)
+```bash
+python backend/run.py               # API on http://127.0.0.1:8000 (Swagger at /docs); screening starts in the background
+cd frontend && npm run dev          # site on http://localhost:5173 — /api is proxied to the backend
+```
+The header shows `LIVE` once screening finishes. If the backend is not running the site shows a labelled
+offline sample fleet; if CelesTrak cannot be reached the API reports why, while the model, SHAP, ESA-replay and
+benchmark views keep working.
+
+| Endpoint | What it serves |
+|---|---|
+| `GET /api/status`, `GET /api/health`, `POST /api/refresh` | Live screening progress, component health, refresh now |
+| `GET /api/conjunctions/satellites` · `/screen` · `/orbit/{norad}` · `/detail/{key}` | Watchlist status, conjunctions with Pc, SGP4 orbits, physics + SHAP of the uncertainty model |
+| `GET /api/maneuver/plan/{key}` · `POST /api/maneuver/decision` · `GET /api/maneuver/decisions` | Planner options + ΔV trade-off curve, accept / decline, audit log |
+| `GET /api/predict/esa-events` · `/esa-replay/{id}` · `POST /api/predict/` · `POST /api/predict/what-if` | Real ESA events, CDM model + TreeSHAP, raw-CDM prediction, Pc what-if |
+| `POST /api/maneuver/optimize` | CDM-only ΔV estimate for an ESA event (`manoeuvre_simulator.py`) |
+| `GET /api/benchmark/metrics` · `/validation` | Saved train / validation / test scores, uncertainty-model errors, validation report |
+| `GET`/`POST /api/scenario`, `GET /api/space-weather` | Inject a simulated threat; current space weather |
+
 ### 5. Check it is correct
 ```bash
-python -m unittest discover tests   # 12 fast offline checks (~3 s)
+python -m unittest discover tests   # 14 fast offline checks (~3 s)
+cd backend && python test_api.py    # 8 end-to-end API checks, offline (~10 s)
 python validate.py                  # full report (~5 min) → 🧪 Validation page
 ```
 
@@ -195,7 +228,8 @@ ESA collision-avoidance CDMs: **162,634 training** and **24,484 test** rows (13,
 | Explainability | SHAP (TreeExplainer) |
 | Data | Space-Track GP + public CDM, CelesTrak GP / SATCAT / SOCRATES / space weather |
 | Dashboard | Streamlit + Plotly 3D |
-| Language / GPU | Python 3.14 / NVIDIA RTX 4060 |
+| Web app | FastAPI + React 19 / Three.js (Vite) |
+| Language / GPU | Python 3.13+ / NVIDIA CUDA GPU for training (models trained on an RTX 4060; inference runs on the CPU) |
 
 ---
 

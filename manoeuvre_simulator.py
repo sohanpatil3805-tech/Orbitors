@@ -104,15 +104,12 @@ class ManoeuvreSimulator:
         }
         factor = direction_factors.get(direction, 0.5)
 
-        # Miss distance change ≈ ΔV × time × factor (simplified)
-        # Convert ΔV from m/s to km/s, time in seconds → change in km
-        delta_miss_km = (delta_v_ms / 1000.0) * time_to_tca_s * factor
-
-        # Apply diminishing returns for very large burns
-        if delta_miss_km > original_miss_distance_km * 10:
-            delta_miss_km = original_miss_distance_km * 10
-
-        return delta_miss_km
+        # Miss distance change ≈ ΔV × time × factor (simplified, linear in ΔV)
+        # Convert ΔV from m/s to km/s, time in seconds → change in km. For along-track
+        # burns this is conservative: Clohessy–Wiltshire drift grows as ≈ 3·ΔV·t.
+        # (No cap tied to the original miss distance: that froze the curve after a
+        # few cm/s and hid how risk keeps falling with larger burns.)
+        return (delta_v_ms / 1000.0) * time_to_tca_s * factor
 
     def estimate_residual_risk(
         self,
@@ -255,7 +252,7 @@ class ManoeuvreSimulator:
         original_risk overrides the model prediction when given.
         """
         dv_options = dv_options or MANOEUVRE_DV_OPTIONS
-        directions = directions or MANOEUVRE_DIRECTIONS
+        directions = directions or list(MANOEUVRE_DIRECTIONS)
 
         original_miss, time_to_tca, _ = self._encounter_state(features, feature_names)
 

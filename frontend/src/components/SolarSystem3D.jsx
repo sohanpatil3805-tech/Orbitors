@@ -299,10 +299,12 @@ export default function SolarSystem3D({
   onSelectBody,
   simSpeed = 1,
   showOrbits = true,
-  showAsteroidBelt = true,
-  showLabels = true
+  showAsteroidBelt = true
 }) {
   const mountRef = useRef(null);
+  // The render loop is created once, so it reads the current speed through a ref
+  const simSpeedRef = useRef(simSpeed);
+  useEffect(() => { simSpeedRef.current = simSpeed; }, [simSpeed]);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
   const controlsRef = useRef(null);
@@ -607,7 +609,7 @@ export default function SolarSystem3D({
       planetEntries.forEach(entry => {
         // Orbit revolution around Sun
         if (entry.data.id !== 'sun' && entry.speed > 0) {
-          entry.angle += entry.speed * simSpeed * delta * 2.5;
+          entry.angle += entry.speed * simSpeedRef.current * delta * 2.5;
           entry.mesh.position.x = Math.cos(entry.angle) * entry.orbitRadius;
           entry.mesh.position.z = Math.sin(entry.angle) * entry.orbitRadius;
         }
@@ -618,12 +620,12 @@ export default function SolarSystem3D({
 
       // Moon revolution around Earth
       if (earthMoonRef.current) {
-        earthMoonRef.current.pivot.rotation.y += 0.04 * simSpeed;
+        earthMoonRef.current.pivot.rotation.y += 0.04 * simSpeedRef.current;
       }
 
       // Asteroid belt slow drift
       if (asteroidBeltRef.current) {
-        asteroidBeltRef.current.rotation.y += 0.0006 * simSpeed;
+        asteroidBeltRef.current.rotation.y += 0.0006 * simSpeedRef.current;
       }
 
       // Smooth camera transition when focusing a body

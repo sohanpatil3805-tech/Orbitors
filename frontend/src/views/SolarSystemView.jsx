@@ -2,24 +2,18 @@ import React, { useState } from 'react';
 import SolarSystem3D from '../components/SolarSystem3D';
 import { SOLAR_SYSTEM_DATA } from '../data/solarSystemData';
 import { 
-  Sun, 
   Orbit, 
   Eye, 
   EyeOff, 
   Compass, 
   RotateCcw, 
-  Play, 
   Pause, 
-  FastForward, 
   X, 
   ChevronRight, 
   Sparkles, 
   Rocket, 
   Globe2,
-  Thermometer,
-  Layers,
-  Compass as CompassIcon,
-  Weight
+  Thermometer
 } from 'lucide-react';
 
 export default function SolarSystemView({ onNavigateToEarthFleet }) {

@@ -20,6 +20,7 @@ from config import (
     CELESTRAK_CACHE_TTL_SECONDS,
     CACHE_DIR,
 )
+from http_cache import host_unreachable, mark_unreachable
 
 
 class CelesTrakFetcher:
@@ -65,6 +66,13 @@ class CelesTrakFetcher:
                 return json.load(f)
 
         url = f"{CELESTRAK_BASE_URL}?GROUP={group}&FORMAT={fmt}"
+        if host_unreachable(url):   # CelesTrak just failed to connect: don't wait out another timeout
+            print(f"[CelesTrak] {group}: CelesTrak was unreachable moments ago; "
+                  + ("using cached copy" if cache_path.exists() else "no cached copy"))
+            if cache_path.exists():
+                with open(cache_path, "r") as f:
+                    return json.load(f)
+            return []
         try:
             resp = requests.get(url, timeout=30)
             resp.raise_for_status()
@@ -75,6 +83,7 @@ class CelesTrakFetcher:
 
             return data
         except requests.RequestException as e:
+            mark_unreachable(url, e)
             print(f"[CelesTrak] Error fetching {group}: {e}")
             if cache_path.exists():
                 with open(cache_path, "r") as f:

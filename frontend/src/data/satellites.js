@@ -1,12 +1,14 @@
+// Risk tiers shared with the backend / dashboard (config.RISK_LEVELS, log10 Pc thresholds).
+// NEGLIGIBLE conjunctions are shown in the LOW tier.
 export const RISK_TIERS = {
-  EXTREME: {
-    key: "EXTREME",
-    label: "Extreme Risk",
+  CRITICAL: {
+    key: "CRITICAL",
+    label: "Critical Risk",
     color: "#dc2626", // Deep warning red
     glowColor: "rgba(0, 0, 0, 0.4)",
     badgeBg: "rgba(220, 38, 38, 0.12)",
     border: "rgba(220, 38, 38, 0.3)",
-    description: "Collision probability Pc ≥ 1E-4. Immediate operator maneuver decision required."
+    description: "Collision probability Pc ≥ 1E-3 (log₁₀ ≥ −3). Manoeuvre."
   },
   HIGH: {
     key: "HIGH",
@@ -15,7 +17,7 @@ export const RISK_TIERS = {
     glowColor: "rgba(0, 0, 0, 0.4)",
     badgeBg: "rgba(249, 115, 22, 0.12)",
     border: "rgba(249, 115, 22, 0.3)",
-    description: "Close pass (300-600m). Radial covariance narrowing. Prepare contingency burn."
+    description: "Pc ≥ 3.2E-5 (log₁₀ ≥ −4.5). Plan a manoeuvre — the planner generates a suggestion."
   },
   MEDIUM: {
     key: "MEDIUM",
@@ -24,7 +26,7 @@ export const RISK_TIERS = {
     glowColor: "rgba(0, 0, 0, 0.4)",
     badgeBg: "rgba(234, 179, 8, 0.12)",
     border: "rgba(234, 179, 8, 0.3)",
-    description: "Pass clearance 1-2 km. Track radar updates on next orbit pass."
+    description: "Pc ≥ 1E-6 (log₁₀ ≥ −6). Review closely."
   },
   LOW: {
     key: "LOW",
@@ -33,18 +35,20 @@ export const RISK_TIERS = {
     glowColor: "rgba(0, 0, 0, 0.4)",
     badgeBg: "rgba(16, 185, 129, 0.12)",
     border: "rgba(16, 185, 129, 0.3)",
-    description: "Clearance > 4 km. Nominal trajectory with zero threat of conjunction."
+    description: "Pc < 1E-6. Standard monitoring."
   }
 };
 
+// Offline sample fleet: shown only while the backend is unreachable (the header says so).
+// Live data comes from GET /api/conjunctions/satellites.
 export const SATELLITES_DATA = [
-  // 1. EXTREME RISK (Dark Red)
+  // 1. CRITICAL RISK (Dark Red)
   {
     id: 25544,
     name: "ISS (ZARYA)",
     operator: "NASA / International",
     intlDesignator: "1998-067A",
-    risk: "EXTREME",
+    risk: "CRITICAL",
     altitudeKm: 418,
     inclinationDeg: 51.64,
     velocityKmS: 7.66,
@@ -62,7 +66,7 @@ export const SATELLITES_DATA = [
     name: "TIANGONG (CSS)",
     operator: "CNSA (China)",
     intlDesignator: "2021-035A",
-    risk: "EXTREME",
+    risk: "CRITICAL",
     altitudeKm: 390,
     inclinationDeg: 41.47,
     velocityKmS: 7.68,

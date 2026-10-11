@@ -376,19 +376,20 @@ def create_risk_gauge(risk_value: float, event_id: str = "") -> go.Figure:
 
 
 def create_altitude_distribution(satellites_df: pd.DataFrame) -> go.Figure:
-    """Create a histogram of satellite altitude distribution."""
-    if "MEAN_MOTION" not in satellites_df.columns:
+    """
+    Histogram of perigee altitudes. Takes either catalogue rows with PERIGEE_KM
+    (catalog.build_catalog) or raw GP records with MEAN_MOTION and ECCENTRICITY.
+    """
+    if "PERIGEE_KM" in satellites_df.columns:
+        alt = pd.to_numeric(satellites_df["PERIGEE_KM"], errors="coerce").to_numpy()
+    elif "MEAN_MOTION" in satellites_df.columns:
+        mm = pd.to_numeric(satellites_df["MEAN_MOTION"], errors="coerce").fillna(0.0)
+        ecc = pd.to_numeric(satellites_df.get("ECCENTRICITY", 0), errors="coerce")
+        sma = np.array([mean_motion_to_sma(m) for m in mm])
+        alt = np.where(sma > 0, sma * (1 - np.asarray(ecc, float)) - EARTH_RADIUS_KM, np.nan)
+    else:
         return go.Figure()
-
-    altitudes = []
-    for _, row in satellites_df.iterrows():
-        mm = row.get("MEAN_MOTION", 0)
-        ecc = row.get("ECCENTRICITY", 0)
-        if mm > 0:
-            sma = mean_motion_to_sma(mm)
-            alt = sma * (1 - ecc) - EARTH_RADIUS_KM
-            if 0 < alt < 50000:
-                altitudes.append(alt)
+    altitudes = alt[np.isfinite(alt) & (alt > 0) & (alt < 50000)]
 
     fig = go.Figure()
 

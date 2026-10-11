@@ -399,9 +399,16 @@ def main():
     section_a(test)
     section_b(train, test)
     from live_pipeline import run_live
-    state = run_live()
-    section_c(state)
-    section_d(state)
+    try:
+        state = run_live()
+    except Exception as e:  # e.g. CelesTrak unreachable with nothing cached: report A/B, skip the live sections
+        state = None
+        for section in ("C. Screening (SGP4)", "D. Manoeuvre physics"):
+            check(section, f"{section[0]} checks", "These checks need the live orbit catalogue.", None,
+                  f"skipped — live orbit data unavailable ({type(e).__name__}: {e})", "—")
+    if state is not None:
+        section_c(state)
+        section_d(state)
 
     report = {"generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
               "runtime_seconds": round(time.time() - start), "checks": CHECKS}

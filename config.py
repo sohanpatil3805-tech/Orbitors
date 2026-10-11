@@ -172,6 +172,9 @@ MANOEUVRE_DIRECTIONS = {
 }
 # Default spacecraft used when the operator has not set one
 DEFAULT_SPACECRAFT = {"mass_kg": 500.0, "isp_s": 220.0, "thrust_n": 1.0}
+# ΔV magnitudes (m/s) tried by the CDM-only manoeuvre simulator (ESA dataset events
+# have no orbit states, so manoeuvre_simulator.py estimates their burns analytically)
+MANOEUVRE_DV_OPTIONS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0]
 
 # Operator accept/decline log
 DECISIONS_LOG = PROJECT_ROOT / "logs" / "manoeuvre_decisions.jsonl"
@@ -187,9 +190,6 @@ STREAMLIT_LAYOUT = "wide"
 # How often the dashboard checks for new live data (seconds). CelesTrak only
 # publishes new GP data every 2 hours, so new screening results follow that.
 DASHBOARD_REFRESH_INTERVAL = 300
-
-# Map configuration
-MAP_STYLE = "mapbox://styles/mapbox/dark-v11"
 
 # Risk level color mapping
 RISK_COLORS = {

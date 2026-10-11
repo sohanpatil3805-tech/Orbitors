@@ -1,31 +1,57 @@
 import React, { useState, useEffect } from 'react';
 import Globe3D from './components/Globe3D';
+import { useApi } from './api';
+import { liveEvent, sortFleet, toGlobeSatellite } from './lib/format';
 import ScreeningView from './views/ScreeningView';
 import AnalysisView from './views/AnalysisView';
 import ManeuverView from './views/ManeuverView';
 import BenchmarkView from './views/BenchmarkView';
 import SolarSystemView from './views/SolarSystemView';
 import { RISK_TIERS, SATELLITES_DATA } from './data/satellites';
-import { 
-  ShieldAlert, 
-  Satellite, 
-  RotateCw, 
-  Eye, 
-  EyeOff, 
-  Compass, 
-  AlertTriangle, 
-  CheckCircle2, 
-  Clock, 
-  X, 
-  ChevronLeft, 
+import {
+  ShieldAlert,
+  Satellite,
+  RotateCw,
+  Eye,
+  EyeOff,
+  Compass,
+  AlertTriangle,
+  CheckCircle2,
+  Clock,
+  X,
+  ChevronLeft,
   ChevronRight,
   Globe,
   Radar,
   BrainCircuit,
   Rocket,
   Award,
-  Orbit
+  Orbit,
+  Wifi,
+  WifiOff
 } from 'lucide-react';
+
+// Header pill: is the page showing live screening results or the offline sample?
+function LinkStatus({ status, statusError, isLive }) {
+  let color = '#34d399', Icon = Wifi, text = 'LIVE';
+  let title = status?.message || '';
+  if (statusError) {
+    color = '#f87171'; Icon = WifiOff; text = 'OFFLINE · SAMPLE DATA'; title = statusError.message;
+  } else if (!isLive) {
+    color = status?.phase === 'error' ? '#f87171' : '#facc15';
+    text = status?.phase === 'error' ? 'SCREENING FAILED · SAMPLE DATA' : 'SCREENING… · SAMPLE DATA';
+    title = status?.error || status?.message || '';
+  } else if (status) {
+    text = `LIVE · ${(status.objects_tracked || 0).toLocaleString()} OBJECTS${status.refreshing ? ' · UPDATING' : ''}`;
+    if (status.test_scenario) text += ' · TEST THREAT';
+  }
+  return (
+    <span title={title} className="mono" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700,
+      padding: '3px 8px', borderRadius: 999, color, border: `1px solid ${color}55`, background: `${color}14` }}>
+      <Icon size={11} /> {text}
+    </span>
+  );
+}
 
 export default function App() {
   // Navigation tabs: 'HOME' (3D Globe), 'SCREENING', 'ANALYSIS', 'MANEUVER', 'BENCHMARK'
@@ -34,8 +60,17 @@ export default function App() {
   // Shared event for analysis/maneuver
   const [activeAnalysisEvent, setActiveAnalysisEvent] = useState(null);
 
-  // Home Page State (Strictly Preserved!)
-  const [selectedSat, setSelectedSat] = useState(SATELLITES_DATA[0]); // Default to ISS
+  // Live fleet from the backend (falls back to the bundled sample while it is unreachable)
+  const { data: status, error: statusError } = useApi('/status', { intervalMs: 10000 });
+  const { data: liveSats } = useApi(status?.phase === 'ready' ? `/conjunctions/satellites?v=${status.updated_at}` : null,
+    { intervalMs: 30000 });
+  const isLive = Boolean(liveSats?.length) && !statusError;
+  const fleet = isLive ? sortFleet(liveSats.map(toGlobeSatellite)) : SATELLITES_DATA;
+
+  // Home Page State (Strictly Preserved!) — undefined = not chosen yet (show the most urgent), null = closed
+  const [selectedSatId, setSelectedSatId] = useState(undefined);
+  const selectedSat = selectedSatId === undefined ? fleet[0] : fleet.find((s) => s.id === selectedSatId) || null;
+  const setSelectedSat = (sat) => setSelectedSatId(sat ? sat.id : null);
   const [filterRisk, setFilterRisk] = useState('ALL');
   const [showOrbits, setShowOrbits] = useState(true);
   const [autoRotate, setAutoRotate] = useState(true);
@@ -55,17 +90,20 @@ export default function App() {
   }, []);
 
   // Filtered satellite list for Home Page
-  const filteredSatellites = SATELLITES_DATA.filter((sat) => {
+  const filteredSatellites = fleet.filter((sat) => {
     if (filterRisk === 'ALL') return true;
     return sat.risk === filterRisk;
   });
 
   const riskCounts = {
-    EXTREME: SATELLITES_DATA.filter(s => s.risk === 'EXTREME').length,
-    HIGH: SATELLITES_DATA.filter(s => s.risk === 'HIGH').length,
-    MEDIUM: SATELLITES_DATA.filter(s => s.risk === 'MEDIUM').length,
-    LOW: SATELLITES_DATA.filter(s => s.risk === 'LOW').length
+    CRITICAL: fleet.filter(s => s.risk === 'CRITICAL').length,
+    HIGH: fleet.filter(s => s.risk === 'HIGH').length,
+    MEDIUM: fleet.filter(s => s.risk === 'MEDIUM').length,
+    LOW: fleet.filter(s => s.risk === 'LOW').length
   };
+  const dangerSats = fleet.filter(s => (s.status ? s.status === 'DANGER' : s.maneuverRequired));
+  const reviewSats = fleet.filter(s => s.status === 'REVIEW');
+  const fleetTone = dangerSats.length ? '#dc2626' : reviewSats.length ? '#eab308' : '#10b981';
 
   // Navigation handlers
   const handleSelectSatelliteForAnalysis = (event) => {
@@ -80,11 +118,11 @@ export default function App() {
 
   return (
     <div style={{ position: 'relative', width: '100vw', height: '100vh', overflow: 'hidden', background: '#030712' }}>
-      
+
       {/* ============================================================== */}
       {/* GLOBAL TOP NAVIGATION HEADER                                   */}
       {/* ============================================================== */}
-      <header 
+      <header
         style={{
           position: 'absolute',
           top: 14,
@@ -103,11 +141,11 @@ export default function App() {
         }}
       >
         {/* Brand */}
-        <div 
+        <div
           onClick={() => setCurrentView('HOME')}
           style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer' }}
         >
-          <div 
+          <div
             style={{
               width: 36,
               height: 36,
@@ -127,7 +165,7 @@ export default function App() {
               <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: '0.08em', color: '#f8fafc' }}>
                 ORBITGUARD<span style={{ color: '#38bdf8' }}>.AI</span>
               </span>
-              <span 
+              <span
                 style={{
                   fontSize: 9,
                   fontWeight: 700,
@@ -146,7 +184,7 @@ export default function App() {
 
         {/* Navigation Tabs */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          
+
           {/* TAB 1: 3D Fleet Globe (Home Page) */}
           <button
             onClick={() => setCurrentView('HOME')}
@@ -281,7 +319,8 @@ export default function App() {
         </div>
 
         {/* UTC Mission Clock */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#94a3b8', fontSize: 11 }} className="mono">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#94a3b8', fontSize: 11 }} className="mono">
+          <LinkStatus status={status} statusError={statusError} isLive={isLive} />
           <Clock size={13} color="#94a3b8" />
           <span>{utcTime || 'UTC 00:00:00'}</span>
         </div>
@@ -292,19 +331,20 @@ export default function App() {
       {/* ============================================================== */}
       {currentView === 'HOME' && (
         <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-          
+
           {/* Centered 3D NASA Blue Marble Earth Globe */}
-          <div 
-            style={{ 
-              position: 'absolute', 
-              inset: 0, 
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
               zIndex: 1,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}
           >
-            <Globe3D 
+            <Globe3D
+              satellites={fleet}
               selectedSatellite={selectedSat}
               onSelectSatellite={(sat) => setSelectedSat(sat)}
               filterRisk={filterRisk}
@@ -315,7 +355,7 @@ export default function App() {
           </div>
 
           {/* 4-Tier Interactive Risk Filter Bar (Sub-bar right beneath header on Home) */}
-          <div 
+          <div
             style={{
               position: 'absolute',
               top: 76,
@@ -345,7 +385,7 @@ export default function App() {
                 cursor: 'pointer'
               }}
             >
-              All ({SATELLITES_DATA.length})
+              All ({fleet.length})
             </button>
 
             {/* SOLAR PLANETS PERSPECTIVE TOGGLE */}
@@ -370,15 +410,15 @@ export default function App() {
               <span>{cameraMode === 'SOLAR' ? 'Focus Earth Fleet' : 'Solar Planets View'}</span>
             </button>
 
-            {/* EXTREME */}
+            {/* CRITICAL */}
             <button
-              onClick={() => setFilterRisk('EXTREME')}
+              onClick={() => setFilterRisk('CRITICAL')}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: 5,
-                background: filterRisk === 'EXTREME' ? RISK_TIERS.EXTREME.badgeBg : 'rgba(220, 38, 38, 0.08)',
-                border: `1px solid ${filterRisk === 'EXTREME' ? RISK_TIERS.EXTREME.border : 'rgba(220, 38, 38, 0.25)'}`,
+                background: filterRisk === 'CRITICAL' ? RISK_TIERS.CRITICAL.badgeBg : 'rgba(220, 38, 38, 0.08)',
+                border: `1px solid ${filterRisk === 'CRITICAL' ? RISK_TIERS.CRITICAL.border : 'rgba(220, 38, 38, 0.25)'}`,
                 color: '#f87171',
                 padding: '4px 10px',
                 borderRadius: 6,
@@ -387,8 +427,8 @@ export default function App() {
                 cursor: 'pointer'
               }}
             >
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: RISK_TIERS.EXTREME.color }} />
-              Extreme ({riskCounts.EXTREME})
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: RISK_TIERS.CRITICAL.color }} />
+              Critical ({riskCounts.CRITICAL})
             </button>
 
             {/* HIGH */}
@@ -481,7 +521,7 @@ export default function App() {
           </button>
 
           {/* Left Floating Fleet Console */}
-          <div 
+          <div
             style={{
               position: 'absolute',
               top: 92,
@@ -500,38 +540,49 @@ export default function App() {
             }}
           >
             {/* Global Fleet Status */}
-            <div 
-              className="glass-panel" 
-              style={{ 
+            <div
+              className="glass-panel"
+              style={{
                 padding: 16,
-                borderLeft: '4px solid #dc2626'
+                borderLeft: `4px solid ${fleetTone}`
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
                 <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', color: '#94a3b8' }}>
                   GLOBAL FLEET STATUS
                 </span>
-                <span 
+                <span
                   style={{
                     fontSize: 10,
                     fontWeight: 700,
                     padding: '2px 6px',
                     borderRadius: 4,
-                    background: 'rgba(220, 38, 38, 0.2)',
-                    color: '#f87171',
-                    border: '1px solid rgba(220, 38, 38, 0.4)'
+                    background: `${fleetTone}33`,
+                    color: fleetTone,
+                    border: `1px solid ${fleetTone}66`
                   }}
                 >
-                  RED ALERT
+                  {dangerSats.length ? 'RED ALERT' : reviewSats.length ? 'REVIEW' : 'ALL CLEAR'}
                 </span>
               </div>
               <div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: '#f8fafc' }}>
-                  2 <span style={{ fontSize: 13, fontWeight: 500, color: '#dc2626' }}>Critical Conjunctions</span>
+                  {dangerSats.length} <span style={{ fontSize: 13, fontWeight: 500, color: fleetTone }}>
+                    {dangerSats.length === 1 ? 'Satellite in Danger' : 'Satellites in Danger'}
+                  </span>
                 </div>
                 <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
-                  ISS & Tiangong crossing 1E-4 safety limit
+                  {dangerSats.length
+                    ? `${dangerSats.map(s => s.name).join(', ')} at high or critical risk`
+                    : reviewSats.length
+                      ? `${reviewSats.length} to review · no high-risk events`
+                      : `No high-risk events in the ${status?.window_hours || 72} h screening window`}
                 </div>
+                {isLive && (
+                  <div style={{ fontSize: 10, color: '#64748b', marginTop: 4 }}>
+                    {status.catalogue_source} · {status.close_approaches} close approaches · screened {new Date(status.screened_at).toUTCString().slice(17, 22)} UTC
+                  </div>
+                )}
               </div>
             </div>
 
@@ -565,14 +616,14 @@ export default function App() {
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span 
+                        <span
                           style={{
                             width: 8,
                             height: 8,
                             borderRadius: '50%',
                             backgroundColor: tier.color
                           }}
-                          className={sat.risk === 'EXTREME' ? 'pulse-extreme' : ''}
+                          className={sat.risk === 'CRITICAL' ? 'pulse-extreme' : ''}
                         />
                         <div>
                           <div style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>
@@ -585,7 +636,7 @@ export default function App() {
                       </div>
 
                       <div style={{ textAlign: 'right' }}>
-                        <span 
+                        <span
                           style={{
                             fontSize: 9,
                             fontWeight: 700,
@@ -596,10 +647,10 @@ export default function App() {
                             border: `1px solid ${tier.border}`
                           }}
                         >
-                          {sat.risk}
+                          {sat.status === 'MITIGATED' ? 'MITIGATED' : sat.risk}
                         </span>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }} className="mono">
-                          {sat.missDistanceM < 1000 ? `${sat.missDistanceM}m` : `${(sat.missDistanceM/1000).toFixed(1)}km`}
+                          {sat.missDistanceM == null ? '—' : sat.missDistanceM < 1000 ? `${sat.missDistanceM}m` : `${(sat.missDistanceM/1000).toFixed(1)}km`}
                         </div>
                       </div>
                     </div>
@@ -611,7 +662,7 @@ export default function App() {
 
           {/* Right Floating Detailed Telemetry Inspection Panel */}
           {selectedSat && (
-            <div 
+            <div
               className="glass-panel"
               style={{
                 position: 'absolute',
@@ -630,7 +681,7 @@ export default function App() {
                     <h3 style={{ fontSize: 16, fontWeight: 800, color: '#f8fafc', margin: 0 }}>
                       {selectedSat.name}
                     </h3>
-                    <span 
+                    <span
                       style={{
                         fontSize: 9,
                         fontWeight: 700,
@@ -640,7 +691,7 @@ export default function App() {
                         background: RISK_TIERS[selectedSat.risk].color
                       }}
                     >
-                      {selectedSat.risk}
+                      {selectedSat.status === 'MITIGATED' ? 'MITIGATED' : selectedSat.risk}
                     </span>
                   </div>
                   <p style={{ fontSize: 11, color: '#94a3b8', marginTop: 2 }}>
@@ -662,7 +713,7 @@ export default function App() {
               </div>
 
               {/* Quick Metrics */}
-              <div 
+              <div
                 style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, 1fr)',
@@ -685,19 +736,19 @@ export default function App() {
                 <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 10px', borderRadius: 6 }}>
                   <div style={{ fontSize: 10, color: '#64748b' }}>Velocity</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc', marginTop: 1 }} className="mono">
-                    {selectedSat.velocityKmS} km/s
+                    {selectedSat.velocityKmS ?? '—'} km/s
                   </div>
                 </div>
                 <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px 10px', borderRadius: 6 }}>
                   <div style={{ fontSize: 10, color: '#64748b' }}>Time to TCA</div>
                   <div style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc', marginTop: 1 }} className="mono">
-                    T-{selectedSat.timeToTcaHours}h
+                    {selectedSat.timeToTcaHours == null ? '—' : `T-${selectedSat.timeToTcaHours}h`}
                   </div>
                 </div>
               </div>
 
               {/* Threat Box */}
-              <div 
+              <div
                 style={{
                   background: RISK_TIERS[selectedSat.risk].badgeBg,
                   border: `1px solid ${RISK_TIERS[selectedSat.risk].border}`,
@@ -718,7 +769,7 @@ export default function App() {
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11 }}>
                   <span style={{ color: '#94a3b8' }}>Miss Distance:</span>
                   <span style={{ fontWeight: 700, color: '#f8fafc' }} className="mono">
-                    {selectedSat.missDistanceM} meters
+                    {selectedSat.missDistanceM == null ? '—' : `${selectedSat.missDistanceM} meters`}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3, fontSize: 11 }}>
@@ -732,7 +783,7 @@ export default function App() {
               {/* Decision */}
               <div style={{ background: 'rgba(0,0,0,0.25)', borderRadius: 8, padding: 12 }}>
                 <div style={{ fontSize: 10, color: '#64748b', marginBottom: 4 }}>
-                  DECISION ENGINE (THRESHOLD 1E-4)
+                  DECISION ENGINE (HIGH ≥ 10⁻⁴·⁵ → MANOEUVRE)
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
                   {selectedSat.maneuverRequired ? (
@@ -746,7 +797,7 @@ export default function App() {
                     <>
                       <CheckCircle2 size={16} color="#10b981" />
                       <span style={{ fontSize: 12, fontWeight: 800, color: '#34d399' }}>
-                        HOLD (ZERO ACTION)
+                        {selectedSat.status === 'MITIGATED' ? 'BURN ACCEPTED' : selectedSat.status === 'REVIEW' ? 'MONITOR (REVIEW)' : 'HOLD (ZERO ACTION)'}
                       </span>
                     </>
                   )}
@@ -760,7 +811,7 @@ export default function App() {
               <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
                 <button
                   onClick={() => {
-                    setActiveAnalysisEvent(selectedSat);
+                    setActiveAnalysisEvent(liveEvent(selectedSat.worst));
                     setCurrentView('ANALYSIS');
                   }}
                   style={{
@@ -780,7 +831,7 @@ export default function App() {
                 {selectedSat.maneuverRequired && (
                   <button
                     onClick={() => {
-                      setActiveAnalysisEvent(selectedSat);
+                      setActiveAnalysisEvent(liveEvent(selectedSat.worst));
                       setCurrentView('MANEUVER');
                     }}
                     style={{
@@ -803,7 +854,7 @@ export default function App() {
           )}
 
           {/* Bottom Dock Controls */}
-          <div 
+          <div
             className="glass-panel"
             style={{
               position: 'absolute',
@@ -891,7 +942,7 @@ export default function App() {
       {/* VIEW 2: 72-HOUR SCREENING VIEW                                 */}
       {/* ============================================================== */}
       {currentView === 'SCREENING' && (
-        <ScreeningView 
+        <ScreeningView
           onSelectSatelliteForAnalysis={handleSelectSatelliteForAnalysis}
           onSelectSatelliteForManeuver={handleSelectSatelliteForManeuver}
         />
@@ -901,7 +952,7 @@ export default function App() {
       {/* VIEW 3: ML RISK & SHAP XAI ANALYSIS VIEW                       */}
       {/* ============================================================== */}
       {currentView === 'ANALYSIS' && (
-        <AnalysisView 
+        <AnalysisView
           event={activeAnalysisEvent}
           onNavigateToManeuver={handleSelectSatelliteForManeuver}
         />
@@ -911,7 +962,7 @@ export default function App() {
       {/* VIEW 4: COLLISION AVOIDANCE MANEUVER (CAM) VIEW                */}
       {/* ============================================================== */}
       {currentView === 'MANEUVER' && (
-        <ManeuverView 
+        <ManeuverView
           event={activeAnalysisEvent}
         />
       )}
@@ -920,14 +971,14 @@ export default function App() {
       {/* VIEW 5: ESA KELVINS BENCHMARK VALIDATION VIEW                  */}
       {/* ============================================================== */}
       {currentView === 'BENCHMARK' && (
-        <BenchmarkView />
+        <BenchmarkView onOpenEvent={handleSelectSatelliteForAnalysis} />
       )}
 
       {/* ============================================================== */}
       {/* VIEW 6: 3D SOLAR SYSTEM ORRERY & PLANETARY TELEMETRY VIEW      */}
       {/* ============================================================== */}
       {currentView === 'SOLAR_SYSTEM' && (
-        <SolarSystemView 
+        <SolarSystemView
           onNavigateToEarthFleet={() => setCurrentView('HOME')}
         />
       )}

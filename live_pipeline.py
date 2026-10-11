@@ -154,6 +154,44 @@ def run_live(force: bool = False, extra_watch: Optional[list] = None,
                      base.get("official_cdms", 0), threats, base["key"])
 
 
+def upcoming(conj: pd.DataFrame) -> pd.DataFrame:
+    """Conjunctions whose closest approach is still in the future."""
+    if conj.empty:
+        return conj
+    return conj[pd.to_datetime(conj["TCA"], utc=True) > pd.Timestamp.now(tz="UTC")]
+
+
+def with_decisions(conj: pd.DataFrame) -> pd.DataFrame:
+    """Add KEY and DECISION columns; conjunctions whose avoidance burn the operator accepted become MITIGATED."""
+    from decisions import latest
+    from manoeuvre_planner import conjunction_key
+    conj = conj.copy()
+    if conj.empty:
+        conj["KEY"], conj["DECISION"] = [], []
+        return conj
+    decided = latest()
+    conj["KEY"] = [conjunction_key(r) for _, r in conj.iterrows()]
+    conj["DECISION"] = [decided.get(k, {}).get("decision", "") for k in conj["KEY"]]
+    conj.loc[conj["DECISION"] == "ACCEPTED", "STATUS"] = "MITIGATED"
+    return conj
+
+
+def satellite_status(conj: pd.DataFrame, watch_ids: list) -> tuple[dict, dict]:
+    """Worst status per watchlist satellite (including MITIGATED) and its worst open conjunction."""
+    order = {"DANGER": 3, "REVIEW": 2, "MITIGATED": 1, "SAFE": 0}
+    status, worst = {}, {}
+    for sid in watch_ids:
+        mine = conj[conj["PRIMARY_ID"] == sid] if not conj.empty else conj
+        if mine.empty:
+            status[sid] = "SAFE"
+            continue
+        status[sid] = max(mine["STATUS"], key=lambda s: order[s])
+        open_ = mine[mine["STATUS"].isin(["DANGER", "REVIEW"])]
+        if not open_.empty:
+            worst[sid] = open_.sort_values("LOG_PC", ascending=False).iloc[0]
+    return status, worst
+
+
 def watchlist_summary(state: LiveState) -> pd.DataFrame:
     """One row per watchlist satellite with its worst upcoming conjunction."""
     conj = state.conjunctions

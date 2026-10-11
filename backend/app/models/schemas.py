@@ -1,119 +1,45 @@
+"""Request bodies (responses are plain JSON built by the services)."""
+
+from typing import Any, Dict, Literal, Optional
+
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 
-class SatelliteInfo(BaseModel):
-    norad_id: int
-    name: str
-    international_designator: str
-    altitude_km: float
-    inclination_deg: float
-    period_min: float
-    status: str
 
-class OrbitPoint(BaseModel):
-    timestamp_utc: str
-    x_km: float
-    y_km: float
-    z_km: float
-    lat_deg: float
-    lon_deg: float
-    alt_km: float
+class WhatIfRequest(BaseModel):
+    """Recompute a conjunction's risk with the real Pc engine after scaling its inputs."""
+    source: Literal["live", "esa"] = Field("live", description="'live' conjunction key or 'esa' test-set event")
+    id: str = Field(..., description="Live conjunction key (e.g. 25544-990000-20261012T061500) or ESA event_id")
+    miss_scale: float = Field(1.0, gt=0, le=100, description="Multiply the miss vector")
+    sigma_scale: float = Field(1.0, gt=0, le=100, description="Multiply every position uncertainty (σ)")
+    hbr_scale: float = Field(1.0, gt=0, le=100, description="Multiply the combined hard-body radius")
 
-class OrbitPathResponse(BaseModel):
-    norad_id: int
-    name: str
-    period_min: float
-    coordinates: List[OrbitPoint]
 
-class CDMFeatureInput(BaseModel):
-    event_id: str = Field(..., description="Unique conjunction event identifier")
-    satellite_id: int = Field(25544, description="Primary NORAD ID (e.g. 25544 for ISS)")
-    secondary_object_id: int = Field(39451, description="Secondary debris NORAD ID")
-    time_to_tca_hours: float = Field(..., description="Hours remaining until Time of Closest Approach")
-    miss_distance_m: float = Field(..., description="Estimated total miss distance in meters")
-    relative_velocity_km_s: float = Field(..., description="Relative closing velocity in km/s")
-    radial_miss_distance_m: float = Field(..., description="Radial miss distance component in meters")
-    in_track_miss_distance_m: float = Field(..., description="In-track miss distance component in meters")
-    cross_track_miss_distance_m: float = Field(..., description="Cross-track miss distance component in meters")
-    radial_position_covariance: float = Field(..., description="Estimated radial position uncertainty")
-    cdm_count_for_event: int = Field(1, description="Number of CDMs received for this encounter")
-    solar_flux_f10_7: float = Field(150.0, description="Solar radio flux F10.7 index (solar drag parameter)")
-    ap_geomagnetic_index: float = Field(15.0, description="Ap geomagnetic storm index")
+class CDMPredictRequest(BaseModel):
+    """One conjunction data message as raw ESA dataset columns (any subset; the rest use training medians)."""
+    event_id: str = Field("custom", description="Label echoed back in the response")
+    cdm: Dict[str, Any] = Field(..., description="Column → value, e.g. {'miss_distance': 142.0, "
+                                                 "'max_risk_estimate': -3.1, 'time_to_tca': 1.5, ...}")
 
-class SHAPFeature(BaseModel):
-    feature: str
-    feature_label: str
-    impact: float = Field(..., description="SHAP attribution value (positive increases risk, negative decreases)")
-    direction: str = Field(..., description="'INCREASES_RISK' or 'REDUCES_RISK'")
-    percentage_contribution: float
-    explanation: str
 
-class PredictionResponse(BaseModel):
-    event_id: str
-    raw_poc: float
-    calibrated_poc: float
-    risk_level: str = Field(..., description="'CRITICAL', 'WARNING', or 'NOMINAL'")
-    go_no_go_decision: str = Field(..., description="'MANEUVER_RECOMMENDED' or 'HOLD'")
-    confidence: float
-    threshold_poc: float = 0.0001
-    shap_explanations: List[SHAPFeature]
-    recommended_burn_ms: float
-    telemetry_readout: Dict[str, str]
+class DecisionRequest(BaseModel):
+    key: str = Field(..., description="Conjunction key")
+    decision: Literal["ACCEPTED", "DECLINED"]
+    option_index: Optional[int] = Field(None, ge=0, description="Index into the plan's options (required to accept)")
+    note: str = Field("", max_length=500)
 
-class ConjunctionSummary(BaseModel):
-    event_id: str
-    primary_norad_id: int
-    primary_name: str
-    secondary_norad_id: int
-    secondary_name: str
-    tca_utc: str
-    time_to_tca_hours: float
-    miss_distance_m: float
-    relative_velocity_km_s: float
-    raw_poc: float
-    calibrated_poc: float
-    risk_level: str
-    go_no_go_decision: str
-    recommended_delta_v_ms: float = 0.0
 
-class ScreeningResponse(BaseModel):
-    satellite_norad_id: int
-    satellite_name: str
-    screening_window_days: int
-    screened_at_utc: str
-    total_screened_objects: int
-    conjunctions_count: int
-    high_risk_count: int
-    conjunctions: List[ConjunctionSummary]
+class ScenarioRequest(BaseModel):
+    """A simulated object on a known collision course with a watchlist satellite (scenario.create_threat)."""
+    enabled: bool = True
+    primary_id: int = Field(25544, description="Watchlist satellite NORAD ID")
+    hours_to_tca: float = Field(18.0, ge=3.0, le=60.0)
+    miss_m: float = Field(25.0, ge=0.0, le=2000.0)
+    crossing_deg: float = Field(70.0, ge=10.0, le=170.0)
+    kind: Literal["debris", "satellite"] = "debris"
 
-class ManeuverTradeoffPoint(BaseModel):
-    delta_v_ms: float
-    residual_poc: float
-    miss_distance_m: float
-    fuel_penalty_kg: float
-    is_safe: bool
-    is_optimal_sweet_spot: bool
 
-class ManeuverOptimizationResponse(BaseModel):
-    event_id: str
-    recommended_delta_v_ms: float
-    recommended_burn_direction: str
-    expected_residual_poc: float
-    expected_miss_distance_m: float
-    fuel_consumed_kg: float
-    alert_reduction_percent: float
-    trade_off_curve: List[ManeuverTradeoffPoint]
-
-class BenchmarkMetrics(BaseModel):
-    model_name: str
-    algorithm: str
-    test_dataset: str
-    f2_score: float
-    baseline_f2_score: float
-    brier_score: float
-    baseline_brier_score: float
-    recall_high_risk: float
-    precision_high_risk: float
-    roc_auc: float
-    events_evaluated: int
-    conclusion: str
+class ManeuverOptimizeRequest(BaseModel):
+    """CDM-only manoeuvre estimate for an ESA test-set event."""
+    event_id: int
+    satellite_mass_kg: Optional[float] = Field(None, gt=0)
+    isp_s: Optional[float] = Field(None, gt=0)

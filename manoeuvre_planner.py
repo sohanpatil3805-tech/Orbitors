@@ -170,6 +170,35 @@ class ManoeuvrePlanner:
         self._recommend(plan, best_p, best_s)
         return plan
 
+    def tradeoff_curve(self, conj: pd.Series, option: BurnOption, n: int = 30) -> list[dict]:
+        """
+        New miss distance, log10 Pc and fuel at the conjunction as ΔV varies, for
+        `option`'s mover, burn time and direction (same linear J2 model as the search).
+        The first point is ΔV = 0 (no burn); the option's own ΔV is included.
+        """
+        mover = option.mover_id
+        other = int(conj["SECONDARY_ID"]) if mover == int(conj["PRIMARY_ID"]) else int(conj["PRIMARY_ID"])
+        C, hbr = self.assessor.combined_covariance(conj.to_frame().T, self.objects, self.t0)
+        tw = float(conj["TCA_S"]) + np.arange(-WINDOW_S, WINDOW_S + WINDOW_STEP_S, WINDOW_STEP_S)
+        R, V = self.source.states([mover, other], tw)
+        burn_s = (pd.Timestamp(option.burn_time) - pd.Timestamp(self.t0)).total_seconds()
+        rb, vb = self.source.state(mover, burn_s)
+        S = burn_sensitivity(np.concatenate([rb[0], vb[0]]), burn_s, tw)
+        unit = np.asarray(option.dv_rtn_ms, float) / max(option.dv_ms, 1e-12)
+        lo = max(option.dv_ms / 30.0, MANOEUVRE_MIN_DV)
+        hi = min(max(option.dv_ms * 4.0, lo * 10), MANOEUVRE_MAX_DV)
+        dvs = np.unique(np.concatenate([[0.0, option.dv_ms], np.logspace(np.log10(lo), np.log10(hi), n)]))
+        dev = np.einsum("wij,kj->kwi", S, unit[None, :] * dvs[:, None])
+        miss, p, v = _closest((R[1] - R[0])[None] - dev[..., :3], (V[1] - V[0])[None] - dev[..., 3:], WINDOW_STEP_S)
+        lp = log_pc(probability_of_collision(p * 1000.0, v * 1000.0, np.repeat(C[:1], len(dvs), 0),
+                                             np.full(len(dvs), hbr[0])))
+        m0, isp = self.sc["mass_kg"], self.sc["isp_s"]
+        return [{"dv_ms": float(dv), "miss_km": float(m), "log_pc": float(l), "level": risk_level(float(l)),
+                 "fuel_kg": float(m0 * (1 - np.exp(-dv / (isp * G0)))),
+                 "meets_target": bool(l <= MANOEUVRE_TARGET_LOG_PC and m >= MANOEUVRE_TARGET_MISS_KM),
+                 "is_option": bool(np.isclose(dv, option.dv_ms))}
+                for dv, m, l in zip(dvs, miss, lp)]
+
     # ── search ──────────────────────────────────────────────────────────────
     def _search(self, mover: int, other: int, conj: pd.Series, C: np.ndarray, hbr: float, role: str) -> list:
         tca_s = float(conj["TCA_S"])

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RISK_TIERS, SATELLITES_DATA } from '../data/satellites';
+import { RISK_TIERS } from '../data/satellites';
 
 // ============================================================================
 // Procedural Canvas Texture Generators for Solar Planets & Celestial Bodies
@@ -165,10 +165,151 @@ function createBillboardLabel(text, color = '#38bdf8', scale = [3.2, 0.82, 1]) {
 }
 
 // ============================================================================
+// FLEET GEOMETRY (live satellites from the API → stylised scene orbits)
+// ============================================================================
+
+// Altitude (km) → scene radius. Exaggerated so LEO shells separate visibly around the 4.85-unit Earth.
+function sceneOrbitRadius(sat, index) {
+  const alt = Number.isFinite(sat.altitudeKm) ? sat.altitudeKm : 500;
+  const t = Math.min(Math.max((alt - 350) / 1000, 0), 1);
+  return 5.6 + t * 4.0 + (index % 3) * 0.06;
+}
+
+// Point on a circular orbit: inclination about the x axis, then RAAN about the (up) y axis.
+function orbitPosition(radius, inc, raan, angle) {
+  const x = radius * Math.cos(angle);
+  const y = radius * Math.sin(angle) * Math.sin(inc);
+  const z = radius * Math.sin(angle) * Math.cos(inc);
+  return new THREE.Vector3(x * Math.cos(raan) + z * Math.sin(raan), y, -x * Math.sin(raan) + z * Math.cos(raan));
+}
+
+function disposeGroup(group) {
+  while (group.children.length) {
+    const child = group.children[group.children.length - 1];
+    group.remove(child);
+    child.traverse((o) => {
+      if (o.geometry) o.geometry.dispose();
+      if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+    });
+  }
+}
+
+// Helper to construct realistic satellite spacecraft
+function createRealisticSatellite(sat, tier) {
+  const satGroup = new THREE.Group();
+  satGroup.userData = { satData: sat };
+  const riskColor = new THREE.Color(tier.color);
+
+  // Chassis
+  const busGeo = new THREE.BoxGeometry(0.36, 0.28, 0.46);
+  const busMat = new THREE.MeshStandardMaterial({
+    color: 0xf1f5f9,
+    metalness: 0.90,
+    roughness: 0.20
+  });
+  const bus = new THREE.Mesh(busGeo, busMat);
+  satGroup.add(bus);
+
+  // MLI Gold Foil
+  const mliGeo = new THREE.BoxGeometry(0.364, 0.05, 0.464);
+  const mliMat = new THREE.MeshStandardMaterial({
+    color: 0xd97706,
+    metalness: 0.95,
+    roughness: 0.28
+  });
+  const mliTop = new THREE.Mesh(mliGeo, mliMat);
+  mliTop.position.set(0, 0.13, 0);
+  satGroup.add(mliTop);
+
+  // Risk status band
+  const statusBandGeo = new THREE.BoxGeometry(0.37, 0.13, 0.47);
+  const statusBandMat = new THREE.MeshStandardMaterial({
+    color: riskColor,
+    roughness: 0.35,
+    metalness: 0.4
+  });
+  const statusBand = new THREE.Mesh(statusBandGeo, statusBandMat);
+  satGroup.add(statusBand);
+
+  // Solar Panels
+  const panelLength = 0.95;
+  const panelWidth = 0.38;
+  const panelThickness = 0.025;
+
+  const createSolarWing = (side) => {
+    const wingGroup = new THREE.Group();
+    const boomGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.25, 8);
+    const boomMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8 });
+    const boom = new THREE.Mesh(boomGeo, boomMat);
+    boom.rotation.z = Math.PI / 2;
+    boom.position.set(side * 0.125, 0, 0);
+    wingGroup.add(boom);
+
+    const wingGeo = new THREE.BoxGeometry(panelLength, panelWidth, panelThickness);
+    const wingMat = new THREE.MeshStandardMaterial({
+      color: 0x0284c7,
+      metalness: 0.85,
+      roughness: 0.25
+    });
+    const wing = new THREE.Mesh(wingGeo, wingMat);
+    wing.position.set(side * (0.25 + panelLength / 2), 0, 0);
+    wingGroup.add(wing);
+
+    // Grid lines
+    for (let i = 1; i <= 3; i++) {
+      const seamGeo = new THREE.BoxGeometry(0.015, panelWidth * 0.95, panelThickness + 0.005);
+      const seamMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+      const seam = new THREE.Mesh(seamGeo, seamMat);
+      seam.position.set(side * (0.25 + (panelLength / 4) * i), 0, 0);
+      wingGroup.add(seam);
+    }
+    return wingGroup;
+  };
+
+  satGroup.add(createSolarWing(1));
+  satGroup.add(createSolarWing(-1));
+
+  // Parabolic Dish
+  const dishGeo = new THREE.SphereGeometry(0.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 3);
+  const dishMat = new THREE.MeshStandardMaterial({
+    color: 0xe2e8f0,
+    metalness: 0.95,
+    roughness: 0.2,
+    side: THREE.DoubleSide
+  });
+  const dish = new THREE.Mesh(dishGeo, dishMat);
+  dish.position.set(0, 0.22, 0.12);
+  dish.rotation.x = -Math.PI / 3;
+  satGroup.add(dish);
+
+  // Thruster
+  const thrusterGeo = new THREE.ConeGeometry(0.12, 0.22, 12, 1, true);
+  const thrusterMat = new THREE.MeshStandardMaterial({
+    color: 0x334155,
+    side: THREE.DoubleSide,
+    metalness: 0.95,
+    roughness: 0.3
+  });
+  const thruster = new THREE.Mesh(thrusterGeo, thrusterMat);
+  thruster.rotation.x = Math.PI / 2;
+  thruster.position.set(0, 0, -0.27);
+  satGroup.add(thruster);
+
+  const thrusterGlowGeo = new THREE.SphereGeometry(0.035, 8, 8);
+  const thrusterGlowMat = new THREE.MeshBasicMaterial({ color: riskColor });
+  const thrusterGlow = new THREE.Mesh(thrusterGlowGeo, thrusterGlowMat);
+  thrusterGlow.position.set(0, 0, -0.20);
+  satGroup.add(thrusterGlow);
+
+  return satGroup;
+}
+
+// ============================================================================
 // MAIN GLOBE COMPONENT
 // ============================================================================
 
 export default function Globe3D({ 
+  satellites = [],
   selectedSatellite, 
   onSelectSatellite, 
   filterRisk,
@@ -675,170 +816,9 @@ export default function Globe3D({
     satellitesGroupRef.current = satellitesGroup;
     scene.add(satellitesGroup);
 
-    // Helper to construct realistic satellite spacecraft
-    const createRealisticSatellite = (sat, tier) => {
-      const satGroup = new THREE.Group();
-      satGroup.userData = { satData: sat };
-      const riskColor = new THREE.Color(tier.color);
 
-      // Chassis
-      const busGeo = new THREE.BoxGeometry(0.36, 0.28, 0.46);
-      const busMat = new THREE.MeshStandardMaterial({
-        color: 0xf1f5f9,
-        metalness: 0.90,
-        roughness: 0.20
-      });
-      const bus = new THREE.Mesh(busGeo, busMat);
-      satGroup.add(bus);
-
-      // MLI Gold Foil
-      const mliGeo = new THREE.BoxGeometry(0.364, 0.05, 0.464);
-      const mliMat = new THREE.MeshStandardMaterial({
-        color: 0xd97706,
-        metalness: 0.95,
-        roughness: 0.28
-      });
-      const mliTop = new THREE.Mesh(mliGeo, mliMat);
-      mliTop.position.set(0, 0.13, 0);
-      satGroup.add(mliTop);
-
-      // Risk status band
-      const statusBandGeo = new THREE.BoxGeometry(0.37, 0.13, 0.47);
-      const statusBandMat = new THREE.MeshStandardMaterial({
-        color: riskColor,
-        roughness: 0.35,
-        metalness: 0.4
-      });
-      const statusBand = new THREE.Mesh(statusBandGeo, statusBandMat);
-      satGroup.add(statusBand);
-
-      // Solar Panels
-      const panelLength = 0.95;
-      const panelWidth = 0.38;
-      const panelThickness = 0.025;
-
-      const createSolarWing = (side) => {
-        const wingGroup = new THREE.Group();
-        const boomGeo = new THREE.CylinderGeometry(0.02, 0.02, 0.25, 8);
-        const boomMat = new THREE.MeshStandardMaterial({ color: 0x64748b, metalness: 0.8 });
-        const boom = new THREE.Mesh(boomGeo, boomMat);
-        boom.rotation.z = Math.PI / 2;
-        boom.position.set(side * 0.125, 0, 0);
-        wingGroup.add(boom);
-
-        const wingGeo = new THREE.BoxGeometry(panelLength, panelWidth, panelThickness);
-        const wingMat = new THREE.MeshStandardMaterial({
-          color: 0x0284c7,
-          metalness: 0.85,
-          roughness: 0.25
-        });
-        const wing = new THREE.Mesh(wingGeo, wingMat);
-        wing.position.set(side * (0.25 + panelLength / 2), 0, 0);
-        wingGroup.add(wing);
-
-        // Grid lines
-        for (let i = 1; i <= 3; i++) {
-          const seamGeo = new THREE.BoxGeometry(0.015, panelWidth * 0.95, panelThickness + 0.005);
-          const seamMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
-          const seam = new THREE.Mesh(seamGeo, seamMat);
-          seam.position.set(side * (0.25 + (panelLength / 4) * i), 0, 0);
-          wingGroup.add(seam);
-        }
-        return wingGroup;
-      };
-
-      satGroup.add(createSolarWing(1));
-      satGroup.add(createSolarWing(-1));
-
-      // Parabolic Dish
-      const dishGeo = new THREE.SphereGeometry(0.22, 16, 8, 0, Math.PI * 2, 0, Math.PI / 3);
-      const dishMat = new THREE.MeshStandardMaterial({
-        color: 0xe2e8f0,
-        metalness: 0.95,
-        roughness: 0.2,
-        side: THREE.DoubleSide
-      });
-      const dish = new THREE.Mesh(dishGeo, dishMat);
-      dish.position.set(0, 0.22, 0.12);
-      dish.rotation.x = -Math.PI / 3;
-      satGroup.add(dish);
-
-      // Thruster
-      const thrusterGeo = new THREE.ConeGeometry(0.12, 0.22, 12, 1, true);
-      const thrusterMat = new THREE.MeshStandardMaterial({
-        color: 0x334155,
-        side: THREE.DoubleSide,
-        metalness: 0.95,
-        roughness: 0.3
-      });
-      const thruster = new THREE.Mesh(thrusterGeo, thrusterMat);
-      thruster.rotation.x = Math.PI / 2;
-      thruster.position.set(0, 0, -0.27);
-      satGroup.add(thruster);
-
-      const thrusterGlowGeo = new THREE.SphereGeometry(0.035, 8, 8);
-      const thrusterGlowMat = new THREE.MeshBasicMaterial({ color: riskColor });
-      const thrusterGlow = new THREE.Mesh(thrusterGlowGeo, thrusterGlowMat);
-      thrusterGlow.position.set(0, 0, -0.20);
-      satGroup.add(thrusterGlow);
-
-      return satGroup;
-    };
-
-    // Spacious Orbital Corridors
-    const ORBIT_ALTITUDE_MAP = {
-      25544: 5.75, // ISS
-      48274: 6.25, // Tiangong
-      20580: 6.85, // Hubble
-      44713: 7.45, // Starlink
-      25994: 8.05, // Terra
-      39086: 8.65, // Sentinel-1A
-      45145: 9.25, // OneWeb
-      41866: 9.70, // GOES-16
-      43226: 10.15 // COSMOS Debris
-    };
-
-    const satEntries = [];
-
-    SATELLITES_DATA.forEach((sat, index) => {
-      const tier = RISK_TIERS[sat.risk];
-      const orbitRadius = ORBIT_ALTITUDE_MAP[sat.id] || (5.8 + index * 0.55);
-      const incRad = THREE.MathUtils.degToRad(sat.inclinationDeg);
-
-      // Orbital Trajectory Line
-      const segments = 128;
-      const points = [];
-      for (let i = 0; i <= segments; i++) {
-        const theta = (i / segments) * Math.PI * 2;
-        const x = orbitRadius * Math.cos(theta);
-        const y = orbitRadius * Math.sin(theta) * Math.sin(incRad);
-        const z = orbitRadius * Math.sin(theta) * Math.cos(incRad);
-        points.push(new THREE.Vector3(x, y, z));
-      }
-      const orbitGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const orbitOpacity = sat.risk === 'EXTREME' ? 0.40 : sat.risk === 'HIGH' ? 0.32 : 0.20;
-      const orbitMat = new THREE.LineBasicMaterial({
-        color: new THREE.Color(tier.color),
-        transparent: true,
-        opacity: orbitOpacity,
-        linewidth: 1
-      });
-      const orbitLine = new THREE.Line(orbitGeo, orbitMat);
-      orbitLine.userData = { risk: sat.risk };
-      orbitsGroup.add(orbitLine);
-
-      // Satellite model
-      const satModel = createRealisticSatellite(sat, tier);
-      satModel.userData.radius = orbitRadius;
-      satModel.userData.incRad = incRad;
-      satModel.userData.speed = sat.orbitSpeed;
-      satModel.userData.angle = (index / SATELLITES_DATA.length) * Math.PI * 2;
-
-      satellitesGroup.add(satModel);
-      satEntries.push(satModel);
-    });
-
-    satMeshesRef.current = satEntries;
+    // Satellites and their orbit lines are built from the `satellites` prop in a separate effect
+    satMeshesRef.current = [];
 
     // 8. Pointer / Raycasting Events (Unified Satellites & Solar Planets)
     const raycaster = new THREE.Raycaster();
@@ -965,23 +945,12 @@ export default function Globe3D({
 
       // Orbit animation for satellites
       satMeshesRef.current.forEach((satGroup) => {
-        satGroup.userData.angle += satGroup.userData.speed;
+        const { radius, incRad, raanRad, speed } = satGroup.userData;
+        satGroup.userData.angle += speed;
         const ang = satGroup.userData.angle;
-        const rad = satGroup.userData.radius;
-        const inc = satGroup.userData.incRad;
-
-        const posX = rad * Math.cos(ang);
-        const posY = rad * Math.sin(ang) * Math.sin(inc);
-        const posZ = rad * Math.sin(ang) * Math.cos(inc);
-
-        satGroup.position.set(posX, posY, posZ);
-
+        satGroup.position.copy(orbitPosition(radius, incRad, raanRad, ang));
         // Orient spacecraft prograde
-        const nextAng = ang + 0.02;
-        const nextX = rad * Math.cos(nextAng);
-        const nextY = rad * Math.sin(nextAng) * Math.sin(inc);
-        const nextZ = rad * Math.sin(nextAng) * Math.cos(inc);
-        satGroup.lookAt(nextX, nextY, nextZ);
+        satGroup.lookAt(orbitPosition(radius, incRad, raanRad, ang + 0.02));
       });
 
       renderer.render(scene, camera);
@@ -1031,6 +1000,61 @@ export default function Globe3D({
     }
   }, [cameraMode]);
 
+  // Build satellites + orbit lines from the live fleet. Rebuilt only when membership or risk
+  // changes; each satellite keeps its place on its orbit across rebuilds.
+  const fleetSignature = satellites.map((s) => `${s.id}:${s.risk}:${s.status || ''}`).join('|');
+  useEffect(() => {
+    const orbitsGroup = orbitsGroupRef.current;
+    const satellitesGroup = satellitesGroupRef.current;
+    if (!orbitsGroup || !satellitesGroup) return;
+    const previousAngles = new Map(satMeshesRef.current.map((m) => [m.userData.satData.id, m.userData.angle]));
+    disposeGroup(orbitsGroup);
+    disposeGroup(satellitesGroup);
+
+    satMeshesRef.current = satellites.map((sat, index) => {
+      const tier = RISK_TIERS[sat.risk] || RISK_TIERS.LOW;
+      const radius = sceneOrbitRadius(sat, index);
+      const incRad = THREE.MathUtils.degToRad(sat.inclinationDeg || 0);
+      const raanRad = THREE.MathUtils.degToRad(Number.isFinite(sat.raanDeg) ? sat.raanDeg : (index * 360) / satellites.length);
+
+      // Orbital Trajectory Line
+      const segments = 128;
+      const points = [];
+      for (let i = 0; i <= segments; i++) {
+        points.push(orbitPosition(radius, incRad, raanRad, (i / segments) * Math.PI * 2));
+      }
+      const orbitOpacity = sat.risk === 'CRITICAL' ? 0.40 : sat.risk === 'HIGH' ? 0.32 : 0.20;
+      const orbitLine = new THREE.Line(
+        new THREE.BufferGeometry().setFromPoints(points),
+        new THREE.LineBasicMaterial({ color: new THREE.Color(tier.color), transparent: true, opacity: orbitOpacity, linewidth: 1 })
+      );
+      orbitLine.userData = { risk: sat.risk };
+      orbitsGroup.add(orbitLine);
+
+      // Satellite model, starting at its real position along the orbit (argument of latitude)
+      const satModel = createRealisticSatellite(sat, tier);
+      satModel.userData.radius = radius;
+      satModel.userData.incRad = incRad;
+      satModel.userData.raanRad = raanRad;
+      satModel.userData.speed = sat.orbitSpeed || 0.0015;
+      satModel.userData.angle = previousAngles.get(sat.id)
+        ?? (Number.isFinite(sat.argLatitudeDeg) ? THREE.MathUtils.degToRad(sat.argLatitudeDeg) : (index / satellites.length) * Math.PI * 2);
+      satModel.position.copy(orbitPosition(radius, incRad, raanRad, satModel.userData.angle));
+      satellitesGroup.add(satModel);
+      return satModel;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fleetSignature]);
+
+  // Keep hover / click data current between rebuilds (miss distance, Pc, TCA change every refresh)
+  useEffect(() => {
+    const byId = new Map(satellites.map((s) => [s.id, s]));
+    satMeshesRef.current.forEach((m) => {
+      const fresh = byId.get(m.userData.satData.id);
+      if (fresh) m.userData.satData = fresh;
+    });
+  }, [satellites]);
+
   // Update visibility according to filters
   useEffect(() => {
     if (!satMeshesRef.current || !orbitsGroupRef.current) return;
@@ -1046,7 +1070,7 @@ export default function Globe3D({
       const visible = showOrbits && (!filterRisk || filterRisk === 'ALL' || risk === filterRisk);
       orbitLine.visible = visible;
     });
-  }, [filterRisk, showOrbits]);
+  }, [filterRisk, showOrbits, fleetSignature]);
 
   // Tactile selection focus: scale selected satellite slightly up
   useEffect(() => {
@@ -1057,7 +1081,7 @@ export default function Globe3D({
       const targetScale = isSelected ? 1.4 : 1.0;
       satGroup.scale.set(targetScale, targetScale, targetScale);
     });
-  }, [selectedSatellite]);
+  }, [selectedSatellite, fleetSignature]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}>
@@ -1096,7 +1120,7 @@ export default function Globe3D({
               width: 10,
               height: 10,
               borderRadius: '50%',
-              backgroundColor: RISK_TIERS[hoveredSat.risk].color
+              backgroundColor: (RISK_TIERS[hoveredSat.risk] || RISK_TIERS.LOW).color
             }}
           />
           <span style={{ fontWeight: 700, fontSize: '14px', color: '#f8fafc' }}>
@@ -1112,7 +1136,7 @@ export default function Globe3D({
               padding: '2px 8px',
               borderRadius: 4,
               color: '#ffffff',
-              backgroundColor: RISK_TIERS[hoveredSat.risk].color
+              backgroundColor: (RISK_TIERS[hoveredSat.risk] || RISK_TIERS.LOW).color
             }}
           >
             {hoveredSat.risk} RISK

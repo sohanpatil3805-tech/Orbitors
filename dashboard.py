@@ -26,13 +26,14 @@ import streamlit as st
 
 from config import (DASHBOARD_REFRESH_INTERVAL, DEFAULT_SPACECRAFT, EXPORT_DIR, IMPORTANT_SATELLITES,
                     MANOEUVRE_TARGET_LOG_PC, MANOEUVRE_TARGET_MISS_KM, PROPAGATION_WINDOW_HOURS,
-                    REVIEW_MISS_DISTANCE_KM, RISK_COLORS)
+                    REVIEW_MISS_DISTANCE_KM, RISK_COLORS, STREAMLIT_LAYOUT, STREAMLIT_PAGE_ICON,
+                    STREAMLIT_PAGE_TITLE, TEST_DATA_PATH, TRAIN_DATA_PATH)
 
 # ─── Page Configuration ──────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="OrbitGuard AI 🛰️",
-    page_icon="🛰️",
-    layout="wide",
+    page_title=STREAMLIT_PAGE_TITLE,
+    page_icon=STREAMLIT_PAGE_ICON,
+    layout=STREAMLIT_LAYOUT,
     initial_sidebar_state="expanded",
 )
 
@@ -256,7 +257,8 @@ inject_custom_css()
 def load_model():
     """Load the trained collision risk model."""
     from collision_model import CollisionRiskModel
-    model = CollisionRiskModel(use_gpu=True)
+    # Inference runs on the CPU (CollisionRiskModel.load sets device="cpu"), so skip the CUDA probe
+    model = CollisionRiskModel(use_gpu=False)
     try:
         model.load()
         return model, True
@@ -264,20 +266,21 @@ def load_model():
         return model, False
 
 
+DATASET_HELP = ("The ESA CDM dataset is not in `Dataset/`. Download `train_data.zip` and `test_data.csv` from "
+                "https://kelvins.esa.int/collision-avoidance-challenge/data/ and put `train_data.csv` and "
+                "`test_data.csv` in the `Dataset` folder.")
+
+
 @st.cache_data(ttl=3600)
 def load_dataset_sample(n_samples: int = 5000):
     """Load a sample from the training dataset for analysis."""
-    from data_preprocessing import DataPreprocessor
-
-    preprocessor = DataPreprocessor()
-    train_df = pd.read_csv("Dataset/train_data.csv", nrows=n_samples)
-    return train_df
+    return pd.read_csv(TRAIN_DATA_PATH, nrows=n_samples)
 
 
 @st.cache_data(ttl=3600)
 def load_test_sample(n_samples: int = 5000):
     """Load a sample from the held-out test dataset."""
-    return pd.read_csv("Dataset/test_data.csv", nrows=n_samples)
+    return pd.read_csv(TEST_DATA_PATH, nrows=n_samples)
 
 
 def predict_risk(model, df: pd.DataFrame) -> np.ndarray:
@@ -325,46 +328,18 @@ def get_live_state(bucket: int, nonce: int, extra_watch: tuple, threats_json: st
 
 def live_state():
     with st.spinner("📡 Updating orbits and screening the watchlist (about a minute when new orbit data arrives)…"):
-        return get_live_state(refresh_bucket() if st.session_state.refresh_nonce == 0 else 0,
-                              st.session_state.refresh_nonce, tuple(st.session_state.extra_watch),
-                              json.dumps(threat_specs(), sort_keys=True))
+        try:
+            return get_live_state(refresh_bucket() if st.session_state.refresh_nonce == 0 else 0,
+                                  st.session_state.refresh_nonce, tuple(st.session_state.extra_watch),
+                                  json.dumps(threat_specs(), sort_keys=True))
+        except Exception as e:  # e.g. CelesTrak unreachable with nothing cached yet
+            st.error(f"📡 Live screening is unavailable: {e}")
+            st.info("The 🧠 AI Explainability, 📊 Model Performance and 🧪 Validation pages work offline.")
+            st.stop()
 
 
-def upcoming(conj: pd.DataFrame) -> pd.DataFrame:
-    if conj.empty:
-        return conj
-    return conj[pd.to_datetime(conj["TCA"], utc=True) > pd.Timestamp.now(tz="UTC")]
-
-
-def effective_status(conj: pd.DataFrame) -> pd.DataFrame:
-    """Mark conjunctions whose avoidance burn the operator accepted as MITIGATED."""
-    from decisions import latest
-    from manoeuvre_planner import conjunction_key
-    conj = conj.copy()
-    if conj.empty:
-        conj["KEY"], conj["DECISION"] = [], []
-        return conj
-    decided = latest()
-    conj["KEY"] = [conjunction_key(r) for _, r in conj.iterrows()]
-    conj["DECISION"] = [decided.get(k, {}).get("decision", "") for k in conj["KEY"]]
-    conj.loc[conj["DECISION"] == "ACCEPTED", "STATUS"] = "MITIGATED"
-    return conj
-
-
-def satellite_status(conj: pd.DataFrame, watch_ids: list) -> tuple[dict, dict]:
-    """Worst status per watchlist satellite and its worst open conjunction."""
-    order = {"DANGER": 3, "REVIEW": 2, "MITIGATED": 1, "SAFE": 0}
-    status, worst = {}, {}
-    for sid in watch_ids:
-        mine = conj[conj["PRIMARY_ID"] == sid] if not conj.empty else conj
-        if mine.empty:
-            status[sid] = "SAFE"
-            continue
-        status[sid] = max(mine["STATUS"], key=lambda s: order[s])
-        open_ = mine[mine["STATUS"].isin(["DANGER", "REVIEW"])]
-        if not open_.empty:
-            worst[sid] = open_.sort_values("LOG_PC", ascending=False).iloc[0]
-    return status, worst
+# Shared with the FastAPI backend: upcoming events, operator decisions (MITIGATED) and per-satellite status
+from live_pipeline import satellite_status, upcoming, with_decisions as effective_status  # noqa: E402
 
 
 # ─── Background manoeuvre planning ────────────────────────────────────────────
@@ -513,7 +488,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         "<div style='text-align:center;color:rgba(255,255,255,0.3);font-size:0.75rem;'>"
-        "OrbitGuard AI v2.0<br>RTX 4060 GPU Accelerated<br>"
+        "OrbitGuard AI v2.0<br>XGBoost · SGP4 · SHAP<br>"
         "© 2026 OrbitGuard Team"
         "</div>",
         unsafe_allow_html=True,
@@ -679,6 +654,8 @@ elif page == "🌍 3D Orbit View":
         st.dataframe(cat[["NORAD_CAT_ID", "OBJECT_NAME", "OBJECT_TYPE", "OWNER", "PERIGEE_KM", "APOGEE_KM",
                           "INCLINATION", "EPOCH_AGE_DAYS", "RADIUS_M", "MANOEUVRABLE"]].head(500).round(2),
                      width="stretch", hide_index=True, height=480)
+        from orbit_visualizations import create_altitude_distribution
+        st.plotly_chart(create_altitude_distribution(cat), width="stretch")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -809,6 +786,8 @@ elif page == "🧠 AI Explainability":
         # Show placeholder with dataset features
         st.markdown("### 📊 Dataset Feature Preview")
         try:
+            if not TRAIN_DATA_PATH.exists():
+                raise FileNotFoundError(DATASET_HELP)
             sample = load_dataset_sample(100)
             st.dataframe(sample.head(10), width="stretch", height=300)
 
@@ -830,8 +809,12 @@ elif page == "🧠 AI Explainability":
         except Exception as e:
             st.error(f"Error: {e}")
 
+    elif not TRAIN_DATA_PATH.exists():
+        st.warning(DATASET_HELP)
+
     else:
         from explainability import RiskExplainer
+        from orbit_visualizations import create_risk_gauge
 
         try:
             explainer = RiskExplainer(model.model, model.feature_names)
@@ -849,6 +832,13 @@ elif page == "🧠 AI Explainability":
             with tab2:
                 st.markdown("### Single Event Explanation")
                 event_idx = st.number_input("Event index", 0, len(X_sample) - 1, 0)
+                row = sample_df.iloc[event_idx]
+                g1, g2 = st.columns(2)
+                g1.plotly_chart(create_risk_gauge(float(model.predict(X_sample[event_idx:event_idx + 1])[0]),
+                                                  str(row["event_id"])), width="stretch")
+                g2.metric("ESA risk (log₁₀ Pc) for this CDM", f"{row['risk']:.3f}",
+                          help=f"Event {row['event_id']} · {row['time_to_tca']:.2f} days before closest approach")
+                g2.caption("The gauge is the model's prediction; ESA's own value is shown for comparison.")
 
                 fig = explainer.create_waterfall_chart(X_sample[event_idx])
                 st.plotly_chart(fig, width="stretch")
@@ -931,6 +921,8 @@ elif page == "📊 Model Performance":
         # Predicted vs actual on held-out test data
         st.markdown("### 🎯 Predicted vs. Actual Risk (Test Set)")
         try:
+            if not TEST_DATA_PATH.exists():
+                raise FileNotFoundError(DATASET_HELP)
             test_df = load_test_sample(5000)
             pred = predict_risk(model, test_df)
             fig = go.Figure()
@@ -1022,8 +1014,8 @@ elif page == "📊 Model Performance":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif page == "🧪 Validation":
     st.markdown("# 🧪 Validation — is the risk and manoeuvre logic correct?")
-    st.markdown("Run `python validate.py` (about 5 minutes) to regenerate this report, and `python -m pytest tests` "
-                "for the fast unit checks.")
+    st.markdown("Run `python validate.py` (about 5 minutes) to regenerate this report, and "
+                "`python -m unittest discover tests` for the fast unit checks.")
     report_path = EXPORT_DIR / "validation_report.json"
     if not report_path.exists():
         st.warning("No validation report yet. Run `python validate.py`.")

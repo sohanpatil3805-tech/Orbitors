@@ -121,6 +121,9 @@ def build_catalog(force: bool = False, max_epoch_age_days: float = 30.0) -> Cata
             "GP_OBJECT_TYPE": rec.get("OBJECT_TYPE"),
         })
 
+    if not rows:
+        raise RuntimeError(f"No usable orbit data from {source}: the source could not be reached and nothing is "
+                           "cached yet. Check the connection to celestrak.org, or set Space-Track credentials in .env.")
     df = pd.DataFrame(rows).set_index("NORAD_CAT_ID")
     if not satcat.empty:
         meta = satcat.reindex(df.index)
