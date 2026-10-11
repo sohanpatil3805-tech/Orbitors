@@ -88,7 +88,6 @@ class CelesTrakFetcher:
             "fengyun-1c-debris",
             "iridium-33-debris",
             "cosmos-2251-debris",
-            "2019-006",
         ]
         all_debris = []
         for group in debris_groups:

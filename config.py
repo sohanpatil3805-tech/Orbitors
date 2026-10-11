@@ -34,9 +34,8 @@ CELESTRAK_GROUPS = {
     "fengyun-1c-debris": "Fengyun 1C Debris",
     "iridium-33-debris": "Iridium 33 Debris",
     "cosmos-2251-debris": "Cosmos 2251 Debris",
-    "2019-006": "Indian ASAT Debris",
 }
-CELESTRAK_CACHE_TTL_SECONDS = 300  # 5 minutes
+CELESTRAK_CACHE_TTL_SECONDS = 7200  # 2 hours — CelesTrak updates GP data every 2 h and returns 403 for earlier re-downloads
 
 # ─── Model Configuration ─────────────────────────────────────────────────────
 # Target column in the dataset
