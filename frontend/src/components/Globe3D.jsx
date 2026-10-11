@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RISK_TIERS, SATELLITES_DATA } from '../data/satellites';
 
 export default function Globe3D({ 
@@ -15,9 +16,11 @@ export default function Globe3D({
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
   const cameraRef = useRef(null);
-  const satellitesGroupRef = useRef(null);
-  const orbitsGroupRef = useRef(null);
+  const controlsRef = useRef(null);
   const earthGroupRef = useRef(null);
+  const starsRef = useRef(null);
+  const orbitsGroupRef = useRef(null);
+  const satellitesGroupRef = useRef(null);
   const satMeshesRef = useRef([]);
 
   useEffect(() => {
@@ -32,7 +35,6 @@ export default function Globe3D({
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    // Position camera dead-center along Z-axis looking straight at (0, 0, 0)
     camera.position.set(0, 0, 11.5);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
@@ -47,7 +49,18 @@ export default function Globe3D({
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // 3. Realistic Sunlight & Ambient Lighting
+    // 3. OrbitControls (Smooth unified orbital rotation of space and satellites)
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.enablePan = false; // Keeps Earth anchored dead-center
+    controls.minDistance = 6.8;
+    controls.maxDistance = 22.0;
+    controls.autoRotate = autoRotate;
+    controls.autoRotateSpeed = 0.7;
+    controlsRef.current = controls;
+
+    // 4. Lighting
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
     scene.add(ambientLight);
 
@@ -55,37 +68,37 @@ export default function Globe3D({
     sunLight.position.set(15, 6, 12);
     scene.add(sunLight);
 
-    // Subtle atmospheric rim light from deep space
     const rimLight = new THREE.DirectionalLight(0x38bdf8, 0.9);
     rimLight.position.set(-15, -4, -10);
     scene.add(rimLight);
 
-    // 4. Starfield Background
+    // 5. Dynamic Starfield (Moves with outer space perspective)
     const starsGeo = new THREE.BufferGeometry();
-    const starCount = 1500;
+    const starCount = 1800;
     const starPositions = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount * 3; i += 3) {
-      starPositions[i] = (Math.random() - 0.5) * 180;
-      starPositions[i + 1] = (Math.random() - 0.5) * 180;
-      starPositions[i + 2] = (Math.random() - 0.5) * 180;
+      starPositions[i] = (Math.random() - 0.5) * 200;
+      starPositions[i + 1] = (Math.random() - 0.5) * 200;
+      starPositions[i + 2] = (Math.random() - 0.5) * 200;
     }
     starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
     const starsMat = new THREE.PointsMaterial({ 
       color: 0xffffff, 
-      size: 0.65, 
+      size: 0.7, 
       transparent: true, 
-      opacity: 0.8 
+      opacity: 0.85 
     });
     const starField = new THREE.Points(starsGeo, starsMat);
+    starsRef.current = starField;
     scene.add(starField);
 
-    // 5. Centered Earth Globe
+    // 6. Central Earth Globe
     const earthGroup = new THREE.Group();
-    earthGroup.position.set(0, 0, 0); // Explicit dead-center
+    earthGroup.position.set(0, 0, 0);
     earthGroupRef.current = earthGroup;
     scene.add(earthGroup);
 
-    // Load Photorealistic NASA Blue Marble Texture from /earth-blue-marble.jpg
+    // NASA Blue Marble Texture
     const textureLoader = new THREE.TextureLoader();
     const earthGeo = new THREE.SphereGeometry(3.6, 64, 64);
 
@@ -103,7 +116,7 @@ export default function Globe3D({
       },
       undefined,
       () => {
-        // Fallback procedural canvas if texture load fails
+        // Fallback procedural canvas
         const canvas = document.createElement('canvas');
         canvas.width = 1024;
         canvas.height = 512;
@@ -144,7 +157,7 @@ export default function Globe3D({
     const auraMesh = new THREE.Mesh(auraGeo, auraMat);
     earthGroup.add(auraMesh);
 
-    // 6. Orbits & Satellites Groups (Dead Center)
+    // 7. Orbits & Satellites Groups (100% Synchronized with Earth Frame)
     const orbitsGroup = new THREE.Group();
     orbitsGroup.position.set(0, 0, 0);
     orbitsGroupRef.current = orbitsGroup;
@@ -247,15 +260,11 @@ export default function Globe3D({
       satMeshesRef.current.push(satGroup);
     });
 
-    // 7. Mouse Orbit Controls & Interaction
-    let isDragging = false;
-    let prevMousePos = { x: 0, y: 0 };
+    // 8. Hover Detection & Click Handling
+    let pointerDownPos = { x: 0, y: 0 };
 
-    const onMouseDown = (e) => {
-      // Don't drag if clicking UI buttons
-      if (e.target !== renderer.domElement) return;
-      isDragging = true;
-      prevMousePos = { x: e.clientX, y: e.clientY };
+    const onPointerDown = (e) => {
+      pointerDownPos = { x: e.clientX, y: e.clientY };
     };
 
     const onMouseMove = (e) => {
@@ -263,7 +272,6 @@ export default function Globe3D({
       const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-      // Raycaster for hover selection
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
       const intersects = raycaster.intersectObjects(
@@ -276,58 +284,39 @@ export default function Globe3D({
         const hoveredGroup = intersects[0].object.parent;
         setHoveredSat(hoveredGroup.userData.satData);
       } else {
-        container.style.cursor = isDragging ? 'grabbing' : 'grab';
+        container.style.cursor = 'grab';
         setHoveredSat(null);
       }
-
-      if (isDragging) {
-        const deltaX = e.clientX - prevMousePos.x;
-        const deltaY = e.clientY - prevMousePos.y;
-
-        earthGroup.rotation.y += deltaX * 0.005;
-        earthGroup.rotation.x += deltaY * 0.005;
-
-        prevMousePos = { x: e.clientX, y: e.clientY };
-      }
     };
 
-    const onMouseUp = () => {
-      isDragging = false;
-      container.style.cursor = 'grab';
-    };
-
-    const onClick = (e) => {
+    const onPointerUp = (e) => {
       if (e.target !== renderer.domElement) return;
-      const rect = renderer.domElement.getBoundingClientRect();
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const distMoved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      // Only trigger click selection if the mouse did not drag
+      if (distMoved < 5) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-      const raycaster = new THREE.Raycaster();
-      raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
-      const intersects = raycaster.intersectObjects(
-        satMeshesRef.current.map((g) => g.children[2]),
-        false
-      );
+        const raycaster = new THREE.Raycaster();
+        raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
+        const intersects = raycaster.intersectObjects(
+          satMeshesRef.current.map((g) => g.children[2]),
+          false
+        );
 
-      if (intersects.length > 0) {
-        const clickedGroup = intersects[0].object.parent;
-        onSelectSatellite(clickedGroup.userData.satData);
+        if (intersects.length > 0) {
+          const clickedGroup = intersects[0].object.parent;
+          onSelectSatellite(clickedGroup.userData.satData);
+        }
       }
     };
 
-    const onWheel = (e) => {
-      e.preventDefault();
-      // Keep camera centered, adjust zoom distance between 8.0 and 20.0
-      camera.position.z = Math.min(20, Math.max(8.0, camera.position.z + e.deltaY * 0.015));
-    };
-
-    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('mousemove', onMouseMove);
-    window.addEventListener('mouseup', onMouseUp);
-    container.addEventListener('click', onClick);
-    container.addEventListener('wheel', onWheel, { passive: false });
+    container.addEventListener('pointerup', onPointerUp);
 
-    // 8. Animation Loop
+    // 9. Animation Render Loop
     let animationFrameId;
     let clock = new THREE.Clock();
 
@@ -335,12 +324,20 @@ export default function Globe3D({
       animationFrameId = requestAnimationFrame(animate);
       const elapsedTime = clock.getElapsedTime();
 
-      // Earth auto rotation (centered)
-      if (autoRotate && !isDragging) {
-        earthGroup.rotation.y += 0.0008;
+      // Update OrbitControls (smooth camera orbit & auto-rotation)
+      controls.update();
+
+      // Earth axial rotation
+      if (earthGroup) {
+        earthGroup.rotation.y += 0.0006;
       }
 
-      // Orbit animation for satellites
+      // Outer Space subtle celestial drift
+      if (starsRef.current) {
+        starsRef.current.rotation.y += 0.0001;
+      }
+
+      // Orbit animation for satellites (perfectly synchronized in orbital plane)
       satMeshesRef.current.forEach((satGroup) => {
         satGroup.userData.angle += satGroup.userData.speed;
         const ang = satGroup.userData.angle;
@@ -364,7 +361,7 @@ export default function Globe3D({
 
     animate();
 
-    // 9. Resize Handling
+    // 10. Resize Handling
     const handleResize = () => {
       if (!container) return;
       const newWidth = container.clientWidth;
@@ -377,15 +374,21 @@ export default function Globe3D({
 
     return () => {
       cancelAnimationFrame(animationFrameId);
-      container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('mousemove', onMouseMove);
-      window.removeEventListener('mouseup', onMouseUp);
-      container.removeEventListener('click', onClick);
-      container.removeEventListener('wheel', onWheel);
+      container.removeEventListener('pointerup', onPointerUp);
       window.removeEventListener('resize', handleResize);
+      controls.dispose();
       renderer.dispose();
       container.innerHTML = '';
     };
+  }, []);
+
+  // Update controls auto-rotation dynamically
+  useEffect(() => {
+    if (controlsRef.current) {
+      controlsRef.current.autoRotate = autoRotate;
+    }
   }, [autoRotate]);
 
   // Update visibility according to filters
@@ -452,7 +455,7 @@ export default function Globe3D({
               fontSize: '11px',
               fontWeight: 800,
               padding: '2px 8px',
-              borderRadius: '4px',
+              borderRadius: 4,
               color: '#ffffff',
               backgroundColor: RISK_TIERS[hoveredSat.risk].color
             }}
