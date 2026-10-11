@@ -351,8 +351,7 @@ export default function Globe3D({
       thruster.position.set(0, 0, -0.27);
       satGroup.add(thruster);
 
-      // Thruster Core Glow (Risk Color)
-      // Thruster Core Glow (Risk Color)
+      // Thruster Core (Risk Color)
       const thrusterGlowGeo = new THREE.SphereGeometry(0.035, 8, 8);
       const thrusterGlowMat = new THREE.MeshBasicMaterial({ color: riskColor });
       const thrusterGlow = new THREE.Mesh(thrusterGlowGeo, thrusterGlowMat);
