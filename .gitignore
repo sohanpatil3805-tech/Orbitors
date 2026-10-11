@@ -1,6 +1,5 @@
 # ==========================================
 # OrbitGuard AI — Git Ignore
-# Pair A: Data Science Repository
 # ==========================================
 
 # ---- Python cache files ----
@@ -14,9 +13,10 @@ venv/
 env/
 ENV/
 
-# ---- Python packaging ----
-build/
+# ---- Node & Frontend artifacts ----
+node_modules/
 dist/
+build/
 *.egg-info/
 .eggs/
 
