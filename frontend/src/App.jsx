@@ -41,6 +41,7 @@ export default function App() {
   const [autoRotate, setAutoRotate] = useState(true);
   const [utcTime, setUtcTime] = useState('');
   const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [cameraMode, setCameraMode] = useState('SOLAR'); // 'SOLAR' (default: Earth + all Solar Planets visible) or 'EARTH'
 
   // Live UTC Mission Clock
   useEffect(() => {
@@ -309,6 +310,7 @@ export default function App() {
               filterRisk={filterRisk}
               showOrbits={showOrbits}
               autoRotate={autoRotate}
+              cameraMode={cameraMode}
             />
           </div>
 
@@ -344,6 +346,28 @@ export default function App() {
               }}
             >
               All ({SATELLITES_DATA.length})
+            </button>
+
+            {/* SOLAR PLANETS PERSPECTIVE TOGGLE */}
+            <button
+              onClick={() => setCameraMode(cameraMode === 'EARTH' ? 'SOLAR' : 'EARTH')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: cameraMode === 'SOLAR' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                border: cameraMode === 'SOLAR' ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                color: cameraMode === 'SOLAR' ? '#38bdf8' : '#94a3b8',
+                padding: '4px 10px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+              title="Zoom camera to view all Solar System planets in space"
+            >
+              <Orbit size={12} />
+              <span>{cameraMode === 'SOLAR' ? 'Focus Earth Fleet' : 'Solar Planets View'}</span>
             </button>
 
             {/* EXTREME */}
@@ -833,11 +857,31 @@ export default function App() {
               {showOrbits ? 'Orbits Visible' : 'Orbits Hidden'}
             </button>
 
+            <button
+              onClick={() => setCameraMode(cameraMode === 'EARTH' ? 'SOLAR' : 'EARTH')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: cameraMode === 'SOLAR' ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                border: cameraMode === 'SOLAR' ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
+                color: cameraMode === 'SOLAR' ? '#38bdf8' : '#94a3b8',
+                padding: '6px 12px',
+                borderRadius: 6,
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer'
+              }}
+            >
+              <Orbit size={13} />
+              {cameraMode === 'SOLAR' ? 'Focus Earth Fleet' : 'View Solar Planets'}
+            </button>
+
             <span style={{ width: 1, height: 16, background: 'rgba(255, 255, 255, 0.1)' }} />
 
             <div style={{ fontSize: 11, color: '#64748b', display: 'flex', alignItems: 'center', gap: 6 }}>
               <Compass size={12} />
-              Drag to rotate • Scroll to zoom • Click satellite to inspect
+              Drag to rotate • Scroll to zoom planets & fleet • Click to inspect
             </div>
           </div>
         </div>
