@@ -44,7 +44,7 @@ export default function Globe3D({
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 0.95;
+    renderer.toneMappingExposure = 1.10;
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -61,17 +61,17 @@ export default function Globe3D({
     controlsRef.current = controls;
 
     // 4. Natural Lighting (Deep space realistic sun & ambient)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
 
-    // Warm, realistic sunlight
-    const sunLight = new THREE.DirectionalLight(0xfffaed, 1.8);
-    sunLight.position.set(16, 8, 12);
+    // Warm, realistic sunlight facing the visible hemisphere
+    const sunLight = new THREE.DirectionalLight(0xfffaed, 2.0);
+    sunLight.position.set(12, 8, 14);
     scene.add(sunLight);
 
     // Subtle neutral dark-side fill
-    const spaceFillLight = new THREE.DirectionalLight(0x1e293b, 0.35);
-    spaceFillLight.position.set(-16, -6, -10);
+    const spaceFillLight = new THREE.DirectionalLight(0x334155, 0.4);
+    spaceFillLight.position.set(-14, -6, -10);
     scene.add(spaceFillLight);
 
     // Camera-attached headlight: ensures spacecraft metallic panels and risk colors shine from all angles
@@ -138,8 +138,8 @@ export default function Globe3D({
         texture.colorSpace = THREE.SRGBColorSpace;
         const earthMat = new THREE.MeshStandardMaterial({
           map: texture,
-          metalness: 0.0,
-          roughness: 0.85,
+          metalness: 0.05,
+          roughness: 0.60, // gives water a soft, realistic specular sheen under space sunlight
         });
         const earthMesh = new THREE.Mesh(earthGeo, earthMat);
         earthGroup.add(earthMesh);
@@ -165,13 +165,14 @@ export default function Globe3D({
       }
     );
 
-    // Thin, realistic atmospheric haze hugging Earth's surface (not overly blue)
-    const atmosphereGeo = new THREE.SphereGeometry(EARTH_RADIUS + 0.08, 64, 64);
+    // Thin, realistic atmospheric Rayleigh scattering haze hugging Earth's surface
+    const atmosphereGeo = new THREE.SphereGeometry(EARTH_RADIUS + 0.06, 64, 64);
     const atmosphereMat = new THREE.MeshBasicMaterial({
-      color: 0x93c5fd,
+      color: 0x38bdf8,
       transparent: true,
-      opacity: 0.07,
-      side: THREE.BackSide
+      opacity: 0.12,
+      side: THREE.BackSide,
+      blending: THREE.AdditiveBlending
     });
     const atmosphereMesh = new THREE.Mesh(atmosphereGeo, atmosphereMat);
     earthGroup.add(atmosphereMesh);
