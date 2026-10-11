@@ -4,6 +4,7 @@ import ScreeningView from './views/ScreeningView';
 import AnalysisView from './views/AnalysisView';
 import ManeuverView from './views/ManeuverView';
 import BenchmarkView from './views/BenchmarkView';
+import SolarSystemView from './views/SolarSystemView';
 import { RISK_TIERS, SATELLITES_DATA } from './data/satellites';
 import { 
   ShieldAlert, 
@@ -22,7 +23,8 @@ import {
   Radar,
   BrainCircuit,
   Rocket,
-  Award
+  Award,
+  Orbit
 } from 'lucide-react';
 
 export default function App() {
@@ -164,6 +166,28 @@ export default function App() {
           >
             <Globe size={14} />
             <span>3D Fleet Globe</span>
+          </button>
+
+          {/* TAB 2: Solar System Orrery */}
+          <button
+            onClick={() => setCurrentView('SOLAR_SYSTEM')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              background: currentView === 'SOLAR_SYSTEM' ? 'rgba(255, 255, 255, 0.12)' : 'transparent',
+              border: currentView === 'SOLAR_SYSTEM' ? '1px solid rgba(255, 255, 255, 0.22)' : '1px solid transparent',
+              color: currentView === 'SOLAR_SYSTEM' ? '#f8fafc' : '#94a3b8',
+              padding: '6px 12px',
+              borderRadius: 8,
+              fontSize: 12,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+          >
+            <Orbit size={14} />
+            <span>Solar System</span>
           </button>
 
           {/* TAB 2: Screening */}
@@ -853,6 +877,15 @@ export default function App() {
       {/* ============================================================== */}
       {currentView === 'BENCHMARK' && (
         <BenchmarkView />
+      )}
+
+      {/* ============================================================== */}
+      {/* VIEW 6: 3D SOLAR SYSTEM ORRERY & PLANETARY TELEMETRY VIEW      */}
+      {/* ============================================================== */}
+      {currentView === 'SOLAR_SYSTEM' && (
+        <SolarSystemView 
+          onNavigateToEarthFleet={() => setCurrentView('HOME')}
+        />
       )}
 
     </div>
