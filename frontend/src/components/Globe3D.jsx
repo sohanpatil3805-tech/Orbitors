@@ -35,7 +35,7 @@ export default function Globe3D({
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-    camera.position.set(0, 0, 11.5);
+    camera.position.set(0, 0, 14.5);
     camera.lookAt(0, 0, 0);
     cameraRef.current = camera;
 
@@ -54,8 +54,8 @@ export default function Globe3D({
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.enablePan = false; // Keeps Earth anchored dead-center
-    controls.minDistance = 6.8;
-    controls.maxDistance = 22.0;
+    controls.minDistance = 7.5;
+    controls.maxDistance = 28.0;
     controls.autoRotate = autoRotate;
     controls.autoRotateSpeed = 0.7;
     controlsRef.current = controls;
@@ -121,7 +121,8 @@ export default function Globe3D({
     starsRef.current = starField;
     scene.add(starField);
 
-    // 6. Central Earth Globe
+    // 6. Central Earth Globe (Increased size for spacious orbital perspective)
+    const EARTH_RADIUS = 4.85;
     const earthGroup = new THREE.Group();
     earthGroup.position.set(0, 0, 0);
     earthGroupRef.current = earthGroup;
@@ -129,7 +130,7 @@ export default function Globe3D({
 
     // NASA Blue Marble Texture
     const textureLoader = new THREE.TextureLoader();
-    const earthGeo = new THREE.SphereGeometry(3.6, 64, 64);
+    const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 64, 64);
 
     textureLoader.load(
       '/earth-blue-marble.jpg',
@@ -165,7 +166,7 @@ export default function Globe3D({
     );
 
     // Thin, realistic atmospheric haze hugging Earth's surface (not overly blue)
-    const atmosphereGeo = new THREE.SphereGeometry(3.68, 64, 64);
+    const atmosphereGeo = new THREE.SphereGeometry(EARTH_RADIUS + 0.08, 64, 64);
     const atmosphereMat = new THREE.MeshBasicMaterial({
       color: 0x93c5fd,
       transparent: true,
@@ -373,11 +374,24 @@ export default function Globe3D({
       return satGroup;
     };
 
+    // Distinct altitude corridors for each satellite (prevents overlap / collision illusions)
+    const ORBIT_ALTITUDE_MAP = {
+      48274: 5.75, // TIANGONG (CSS) - 390 km (0.90 clearance above Earth)
+      25544: 6.25, // ISS (ZARYA) - 418 km
+      20580: 6.80, // HUBBLE - 535 km
+      44713: 7.35, // STARLINK-1007 - 550 km
+      39634: 7.90, // SENTINEL-1A - 693 km
+      49260: 8.45, // LANDSAT-9 - 705 km
+      25994: 9.00, // TERRA (EOS AM-1) - 705 km
+      43013: 9.55, // NOAA-20 - 824 km
+      45145: 10.15 // ONEWEB-0145 - 1200 km
+    };
+
     // Build Satellites & Trajectories
     satMeshesRef.current = [];
-    SATELLITES_DATA.forEach((sat) => {
+    SATELLITES_DATA.forEach((sat, index) => {
       const tier = RISK_TIERS[sat.risk];
-      const orbitRadius = 3.6 * sat.orbitRadiusScale;
+      const orbitRadius = ORBIT_ALTITUDE_MAP[sat.id] || (EARTH_RADIUS + 1.2 + index * 0.5);
       const incRad = (sat.inclinationDeg * Math.PI) / 180;
 
       // 3D Orbit Curve
@@ -404,8 +418,9 @@ export default function Globe3D({
       // Construct Realistic Spacecraft Model
       const satGroup = createRealisticSatellite(sat, tier);
 
-      // Initial orbital position
-      const initialAngle = ((sat.id * 57) % 360) * (Math.PI / 180);
+      // Distribute initial phase angle evenly around 360 degrees (clean constellation spacing)
+      const phaseOffset = (index / SATELLITES_DATA.length) * Math.PI * 2;
+      const initialAngle = phaseOffset + (((sat.id * 19) % 35) * (Math.PI / 180));
       satGroup.userData.angle = initialAngle;
       satGroup.userData.radius = orbitRadius;
       satGroup.userData.incRad = incRad;
