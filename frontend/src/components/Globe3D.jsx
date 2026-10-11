@@ -69,26 +69,53 @@ export default function Globe3D({
     sunLight.position.set(16, 8, 12);
     scene.add(sunLight);
 
-    // Subtle neutral dark-side fill (no blue tint)
+    // Subtle neutral dark-side fill
     const spaceFillLight = new THREE.DirectionalLight(0x1e293b, 0.35);
     spaceFillLight.position.set(-16, -6, -10);
     scene.add(spaceFillLight);
 
-    // 5. Dynamic Starfield (Moves with outer space perspective)
+    // Camera-attached headlight: ensures spacecraft metallic panels and risk colors shine from all angles
+    const cameraLight = new THREE.DirectionalLight(0xffffff, 0.45);
+    camera.add(cameraLight);
+    scene.add(camera);
+
+    // 5. Dynamic Starfield (Distributed strictly in deep space background shell)
     const starsGeo = new THREE.BufferGeometry();
-    const starCount = 1800;
+    const starCount = 2000;
     const starPositions = new Float32Array(starCount * 3);
     for (let i = 0; i < starCount * 3; i += 3) {
-      starPositions[i] = (Math.random() - 0.5) * 200;
-      starPositions[i + 1] = (Math.random() - 0.5) * 200;
-      starPositions[i + 2] = (Math.random() - 0.5) * 200;
+      const u = Math.random();
+      const v = Math.random();
+      const theta = u * 2.0 * Math.PI;
+      const phi = Math.acos(2.0 * v - 1.0);
+      const r = 90 + Math.random() * 80; // Distant outer shell, never near camera
+      const sinPhi = Math.sin(phi);
+      starPositions[i] = r * sinPhi * Math.cos(theta);
+      starPositions[i + 1] = r * sinPhi * Math.sin(theta);
+      starPositions[i + 2] = r * Math.cos(phi);
     }
     starsGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+
+    // Circular glowing star texture (eliminates any square pixel artifacts)
+    const starCanvas = document.createElement('canvas');
+    starCanvas.width = 32;
+    starCanvas.height = 32;
+    const starCtx = starCanvas.getContext('2d');
+    const grad = starCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    grad.addColorStop(0.3, 'rgba(224, 238, 255, 0.85)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    starCtx.fillStyle = grad;
+    starCtx.fillRect(0, 0, 32, 32);
+    const starTexture = new THREE.CanvasTexture(starCanvas);
+
     const starsMat = new THREE.PointsMaterial({ 
-      color: 0xffffff, 
-      size: 0.7, 
+      map: starTexture,
+      size: 1.8, 
       transparent: true, 
-      opacity: 0.85 
+      opacity: 0.85,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending
     });
     const starField = new THREE.Points(starsGeo, starsMat);
     starsRef.current = starField;
@@ -159,6 +186,193 @@ export default function Globe3D({
     satellitesGroupRef.current = satellitesGroup;
     scene.add(satellitesGroup);
 
+    // Helper to construct realistic satellite spacecraft
+    const createRealisticSatellite = (sat, tier) => {
+      const satGroup = new THREE.Group();
+      satGroup.userData = { satData: sat };
+      const riskColor = new THREE.Color(tier.color);
+
+      // 1. Satellite Bus Chassis (High-tech aerospace composite body)
+      const busGeo = new THREE.BoxGeometry(0.36, 0.28, 0.46);
+      const busMat = new THREE.MeshStandardMaterial({
+        color: 0xf1f5f9,
+        metalness: 0.90,
+        roughness: 0.20
+      });
+      const bus = new THREE.Mesh(busGeo, busMat);
+      satGroup.add(bus);
+
+      // Multi-Layer Insulation (MLI) Gold Foil Thermal Shield on Top/Side
+      const mliGeo = new THREE.BoxGeometry(0.364, 0.05, 0.464);
+      const mliMat = new THREE.MeshStandardMaterial({
+        color: 0xd97706, // Gold aerospace thermal foil
+        metalness: 0.95,
+        roughness: 0.28
+      });
+      const mliTop = new THREE.Mesh(mliGeo, mliMat);
+      mliTop.position.set(0, 0.13, 0);
+      satGroup.add(mliTop);
+
+      // 2. Risk Status Telemetry Band (Changes color directly per hitting probability!)
+      const statusBandGeo = new THREE.BoxGeometry(0.37, 0.13, 0.47);
+      const statusBandMat = new THREE.MeshStandardMaterial({
+        color: riskColor,
+        emissive: riskColor,
+        emissiveIntensity: 0.85,
+        metalness: 0.5,
+        roughness: 0.20
+      });
+      const statusBand = new THREE.Mesh(statusBandGeo, statusBandMat);
+      statusBand.position.set(0, 0, 0);
+      satGroup.add(statusBand);
+
+      // 3. Dual Photovoltaic Solar Array Wings (Segmented panels with realistic solar cells)
+      const solarMat = new THREE.MeshStandardMaterial({
+        color: 0x1d4ed8, // Authentic space photovoltaic crystalline blue
+        metalness: 0.88,
+        roughness: 0.15
+      });
+      const panelFrameMat = new THREE.MeshStandardMaterial({
+        color: 0x64748b, // Aerospace titanium panel border
+        metalness: 0.85,
+        roughness: 0.3
+      });
+
+      // Wing parameters: 2 segmented panels per wing (wingspan ~2.2 units across)
+      const pW = 0.40;
+      const pH = 0.02;
+      const pD = 0.34;
+
+      [-1, 1].forEach((side) => {
+        // Articulated deployment boom truss
+        const boomGeo = new THREE.CylinderGeometry(0.016, 0.016, 0.22, 8);
+        const boom = new THREE.Mesh(boomGeo, panelFrameMat);
+        boom.rotation.z = Math.PI / 2;
+        boom.position.set(side * 0.28, 0, 0);
+        satGroup.add(boom);
+
+        // Inner Solar Panel Segment
+        const innerPanel = new THREE.Mesh(new THREE.BoxGeometry(pW, pH, pD), solarMat);
+        innerPanel.position.set(side * (0.39 + pW / 2), 0, 0);
+        satGroup.add(innerPanel);
+
+        // Panel Hinge Connector
+        const hingeGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.06, 8);
+        const hinge = new THREE.Mesh(hingeGeo, panelFrameMat);
+        hinge.rotation.x = Math.PI / 2;
+        hinge.position.set(side * (0.39 + pW + 0.03), 0, 0);
+        satGroup.add(hinge);
+
+        // Outer Solar Panel Segment
+        const outerPanel = new THREE.Mesh(new THREE.BoxGeometry(pW, pH, pD), solarMat);
+        outerPanel.position.set(side * (0.39 + pW + 0.06 + pW / 2), 0, 0);
+        satGroup.add(outerPanel);
+
+        // Wingtip Collision Hazard Beacon (Glowing in Risk/Hitting Probability Color!)
+        const tipBeaconGeo = new THREE.SphereGeometry(0.06, 12, 12);
+        const tipBeaconMat = new THREE.MeshStandardMaterial({
+          color: riskColor,
+          emissive: riskColor,
+          emissiveIntensity: 1.0,
+          roughness: 0.1
+        });
+        const tipBeacon = new THREE.Mesh(tipBeaconGeo, tipBeaconMat);
+        tipBeacon.position.set(side * (0.39 + pW * 2 + 0.09), 0, 0);
+        satGroup.add(tipBeacon);
+      });
+
+      // 4. Parabolic High-Gain Communications Dish Antenna (Points Nadir towards Earth)
+      const dishGroup = new THREE.Group();
+      dishGroup.position.set(0, 0.20, 0.16);
+
+      // Parabolic Reflector Dish
+      const dishGeo = new THREE.ConeGeometry(0.18, 0.10, 24, 1, true);
+      const dishMat = new THREE.MeshStandardMaterial({
+        color: 0xf8fafc,
+        side: THREE.DoubleSide,
+        metalness: 0.75,
+        roughness: 0.22
+      });
+      const dish = new THREE.Mesh(dishGeo, dishMat);
+      dish.rotation.x = -Math.PI / 2;
+      dishGroup.add(dish);
+
+      // Central Feed Horn & Subreflector (Glowing in Risk/Hitting Probability Color)
+      const feedGeo = new THREE.CylinderGeometry(0.015, 0.022, 0.12, 8);
+      const feedMat = new THREE.MeshStandardMaterial({
+        color: riskColor,
+        emissive: riskColor,
+        emissiveIntensity: 0.95,
+        roughness: 0.2
+      });
+      const feed = new THREE.Mesh(feedGeo, feedMat);
+      feed.rotation.x = -Math.PI / 2;
+      feed.position.set(0, 0, 0.08);
+      dishGroup.add(feed);
+
+      satGroup.add(dishGroup);
+
+      // 5. Earth Observation Optical Payload / Star Tracker
+      const opticGeo = new THREE.CylinderGeometry(0.065, 0.08, 0.10, 16);
+      const opticMat = new THREE.MeshStandardMaterial({
+        color: 0x1e293b,
+        metalness: 0.9,
+        roughness: 0.1
+      });
+      const opticBarrel = new THREE.Mesh(opticGeo, opticMat);
+      opticBarrel.position.set(0, -0.16, 0.10);
+      satGroup.add(opticBarrel);
+
+      // Glass Lens Element
+      const lensGeo = new THREE.CircleGeometry(0.06, 16);
+      const lensMat = new THREE.MeshStandardMaterial({
+        color: 0x38bdf8,
+        emissive: 0x0284c7,
+        emissiveIntensity: 0.5,
+        roughness: 0.1
+      });
+      const lens = new THREE.Mesh(lensGeo, lensMat);
+      lens.rotation.x = Math.PI / 2;
+      lens.position.set(0, -0.211, 0.10);
+      satGroup.add(lens);
+
+      // 6. Aft Apogee Thruster Rocket Nozzle
+      const thrusterGeo = new THREE.ConeGeometry(0.09, 0.14, 16, 1, true);
+      const thrusterMat = new THREE.MeshStandardMaterial({
+        color: 0x334155,
+        side: THREE.DoubleSide,
+        metalness: 0.95,
+        roughness: 0.3
+      });
+      const thruster = new THREE.Mesh(thrusterGeo, thrusterMat);
+      thruster.rotation.x = Math.PI / 2;
+      thruster.position.set(0, 0, -0.27);
+      satGroup.add(thruster);
+
+      // Thruster Core Glow (Risk Color)
+      const thrusterGlowGeo = new THREE.SphereGeometry(0.035, 8, 8);
+      const thrusterGlowMat = new THREE.MeshBasicMaterial({ color: riskColor });
+      const thrusterGlow = new THREE.Mesh(thrusterGlowGeo, thrusterGlowMat);
+      thrusterGlow.position.set(0, 0, -0.25);
+      satGroup.add(thrusterGlow);
+
+      // 7. Dynamic Hazard Proximity Ring (All tiers colored per hitting probability)
+      const haloOpacity = sat.risk === 'EXTREME' ? 0.75 : (sat.risk === 'HIGH' ? 0.55 : (sat.risk === 'MEDIUM' ? 0.40 : 0.25));
+      const haloRadius = sat.risk === 'EXTREME' ? [0.78, 0.88] : (sat.risk === 'HIGH' ? [0.70, 0.80] : (sat.risk === 'MEDIUM' ? [0.64, 0.72] : [0.58, 0.66]));
+      const haloGeo = new THREE.RingGeometry(haloRadius[0], haloRadius[1], 36);
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: riskColor,
+        transparent: true,
+        opacity: haloOpacity,
+        side: THREE.DoubleSide
+      });
+      const halo = new THREE.Mesh(haloGeo, haloMat);
+      halo.name = 'halo';
+      satGroup.add(halo);
+
+      return satGroup;
+    };
+
     // Build Satellites & Trajectories
     satMeshesRef.current = [];
     SATELLITES_DATA.forEach((sat) => {
@@ -187,53 +401,8 @@ export default function Globe3D({
       orbitLine.userData = { satId: sat.id, risk: sat.risk };
       orbitsGroup.add(orbitLine);
 
-      // Satellite Group
-      const satGroup = new THREE.Group();
-      satGroup.userData = { satData: sat };
-
-      // Satellite Metallic Core
-      const bodyGeo = new THREE.BoxGeometry(0.16, 0.12, 0.12);
-      const bodyMat = new THREE.MeshStandardMaterial({
-        color: 0xf1f5f9,
-        metalness: 0.9,
-        roughness: 0.1
-      });
-      const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat);
-      satGroup.add(bodyMesh);
-
-      // Solar Arrays
-      const panelGeo = new THREE.BoxGeometry(0.52, 0.02, 0.16);
-      const panelMat = new THREE.MeshStandardMaterial({
-        color: 0x0284c7,
-        metalness: 0.6,
-        roughness: 0.3
-      });
-      const panelMesh = new THREE.Mesh(panelGeo, panelMat);
-      satGroup.add(panelMesh);
-
-      // Glowing Beacon Sphere (Risk Tier Color)
-      const beaconGeo = new THREE.SphereGeometry(0.24, 16, 16);
-      const beaconMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(tier.color),
-        transparent: true,
-        opacity: 0.9
-      });
-      const beaconMesh = new THREE.Mesh(beaconGeo, beaconMat);
-      satGroup.add(beaconMesh);
-
-      // Pulsing Halo for Extreme & High Risk
-      if (sat.risk === 'EXTREME' || sat.risk === 'HIGH') {
-        const haloGeo = new THREE.SphereGeometry(0.48, 16, 16);
-        const haloMat = new THREE.MeshBasicMaterial({
-          color: new THREE.Color(tier.color),
-          transparent: true,
-          opacity: 0.35,
-          wireframe: true
-        });
-        const haloMesh = new THREE.Mesh(haloGeo, haloMat);
-        haloMesh.name = 'halo';
-        satGroup.add(haloMesh);
-      }
+      // Construct Realistic Spacecraft Model
+      const satGroup = createRealisticSatellite(sat, tier);
 
       // Initial orbital position
       const initialAngle = ((sat.id * 57) % 360) * (Math.PI / 180);
@@ -251,29 +420,37 @@ export default function Globe3D({
       satMeshesRef.current.push(satGroup);
     });
 
-    // 8. Hover Detection & Click Handling
+    // 8. Hover Detection & Click Handling (Recursive on all spacecraft parts)
     let pointerDownPos = { x: 0, y: 0 };
 
     const onPointerDown = (e) => {
       pointerDownPos = { x: e.clientX, y: e.clientY };
     };
 
-    const onMouseMove = (e) => {
+    const getIntersectedSatellite = (event) => {
       const rect = renderer.domElement.getBoundingClientRect();
-      const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       const raycaster = new THREE.Raycaster();
       raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
-      const intersects = raycaster.intersectObjects(
-        satMeshesRef.current.map((g) => g.children[2]),
-        false
-      );
+      const intersects = raycaster.intersectObjects(satMeshesRef.current, true);
 
       if (intersects.length > 0) {
+        let obj = intersects[0].object;
+        while (obj && !obj.userData?.satData && obj.parent) {
+          obj = obj.parent;
+        }
+        return obj?.userData?.satData || null;
+      }
+      return null;
+    };
+
+    const onMouseMove = (e) => {
+      const satData = getIntersectedSatellite(e);
+      if (satData) {
         container.style.cursor = 'pointer';
-        const hoveredGroup = intersects[0].object.parent;
-        setHoveredSat(hoveredGroup.userData.satData);
+        setHoveredSat(satData);
       } else {
         container.style.cursor = 'grab';
         setHoveredSat(null);
@@ -283,22 +460,10 @@ export default function Globe3D({
     const onPointerUp = (e) => {
       if (e.target !== renderer.domElement) return;
       const distMoved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
-      // Only trigger click selection if the mouse did not drag
-      if (distMoved < 5) {
-        const rect = renderer.domElement.getBoundingClientRect();
-        const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-        const raycaster = new THREE.Raycaster();
-        raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), camera);
-        const intersects = raycaster.intersectObjects(
-          satMeshesRef.current.map((g) => g.children[2]),
-          false
-        );
-
-        if (intersects.length > 0) {
-          const clickedGroup = intersects[0].object.parent;
-          onSelectSatellite(clickedGroup.userData.satData);
+      if (distMoved < 6) {
+        const satData = getIntersectedSatellite(e);
+        if (satData) {
+          onSelectSatellite(satData);
         }
       }
     };
@@ -335,15 +500,28 @@ export default function Globe3D({
         const rad = satGroup.userData.radius;
         const inc = satGroup.userData.incRad;
 
-        satGroup.position.x = rad * Math.cos(ang);
-        satGroup.position.y = rad * Math.sin(ang) * Math.sin(inc);
-        satGroup.position.z = rad * Math.sin(ang) * Math.cos(inc);
+        const posX = rad * Math.cos(ang);
+        const posY = rad * Math.sin(ang) * Math.sin(inc);
+        const posZ = rad * Math.sin(ang) * Math.cos(inc);
 
-        // Pulse Beacon Halo
+        satGroup.position.set(posX, posY, posZ);
+
+        // Orient spacecraft prograde (forward along orbit trajectory)
+        const nextAng = ang + 0.02;
+        const nextX = rad * Math.cos(nextAng);
+        const nextY = rad * Math.sin(nextAng) * Math.sin(inc);
+        const nextZ = rad * Math.sin(nextAng) * Math.cos(inc);
+        satGroup.lookAt(nextX, nextY, nextZ);
+
+        // Pulse Hazard Proximity Halo (Billboard oriented towards camera)
         const halo = satGroup.getObjectByName('halo');
         if (halo) {
-          const pulse = 1.0 + Math.sin(elapsedTime * 4.5) * 0.28;
+          const satRisk = satGroup.userData.satData?.risk;
+          const pulseSpeed = satRisk === 'EXTREME' ? 6.0 : 3.5;
+          const pulse = 1.0 + Math.sin(elapsedTime * pulseSpeed) * 0.24;
           halo.scale.set(pulse, pulse, pulse);
+          // Keep halo facing camera for clear tactical display
+          halo.quaternion.copy(camera.quaternion);
         }
       });
 
@@ -398,6 +576,17 @@ export default function Globe3D({
       orbitLine.visible = visible;
     });
   }, [filterRisk, showOrbits]);
+
+  // Tactile selection focus: scale selected satellite slightly up
+  useEffect(() => {
+    if (!satMeshesRef.current) return;
+    satMeshesRef.current.forEach((satGroup) => {
+      const sat = satGroup.userData.satData;
+      const isSelected = selectedSatellite && sat?.id === selectedSatellite.id;
+      const targetScale = isSelected ? 1.4 : 1.0;
+      satGroup.scale.set(targetScale, targetScale, targetScale);
+    });
+  }, [selectedSatellite]);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
