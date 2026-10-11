@@ -1,0 +1,11 @@
+# Dashboard theme (dashboard.py). Cyan accent instead of Streamlit's default red,
+# so filters and controls match the rest of the UI.
+[theme]
+base = "dark"
+primaryColor = "#22C7E8"
+backgroundColor = "#0B1220"
+secondaryBackgroundColor = "#111B30"
+textColor = "#E6ECFF"
+
+[browser]
+gatherUsageStats = false

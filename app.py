@@ -1,16 +1,32 @@
 """
 OrbitGuard AI — Streamlit Dashboard
-Real-time satellite collision risk assessment with explainable AI.
+Live collision screening of important satellites, explainable risk, and
+operator-approved avoidance manoeuvres.
 """
 
-import streamlit as st
+import json
+import sys
+import threading
+import time
+from datetime import datetime, timezone
+
+# Log messages contain emoji; on Windows a redirected console defaults to cp1252 and
+# would crash on them, so force UTF-8 output.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import plotly.express as px
-from pathlib import Path
-import time
-import json
+import plotly.graph_objects as go
+import streamlit as st
+
+from config import (DASHBOARD_REFRESH_INTERVAL, DEFAULT_SPACECRAFT, EXPORT_DIR, IMPORTANT_SATELLITES,
+                    MANOEUVRE_TARGET_LOG_PC, MANOEUVRE_TARGET_MISS_KM, PROPAGATION_WINDOW_HOURS,
+                    REVIEW_MISS_DISTANCE_KM, RISK_COLORS)
 
 # ─── Page Configuration ──────────────────────────────────────────────────────
 st.set_page_config(
@@ -199,6 +215,27 @@ def inject_custom_css():
         animation: pulse-red 2s infinite;
     }
 
+    /* ─── Status banner and chips ────────────────────────────────────── */
+    .og-banner {
+        display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 20px; margin: 6px 0 14px; border-radius: 14px;
+        background: rgba(13, 22, 42, 0.72); border: 1px solid rgba(120, 160, 255, 0.18);
+        backdrop-filter: blur(12px);
+    }
+    .og-banner .og-head { font-weight: 600; font-size: 1.02rem; color: #EAF0FF; }
+    .og-danger { border-left: 4px solid #FF3B5C; box-shadow: 0 0 24px rgba(255, 59, 92, 0.12); }
+    .og-review { border-left: 4px solid #FFA62B; }
+    .og-safe { border-left: 4px solid #3DDC97; }
+    .og-chip {
+        display: inline-block; margin-left: 8px; padding: 4px 12px; border-radius: 999px;
+        font-size: 0.82rem; font-weight: 600; letter-spacing: 0.2px;
+    }
+    .og-chip-danger { background: rgba(255, 59, 92, 0.14); color: #FF8DA1; border: 1px solid rgba(255, 59, 92, 0.35); }
+    .og-chip-review { background: rgba(255, 166, 43, 0.12); color: #FFC56B; border: 1px solid rgba(255, 166, 43, 0.32); }
+    .og-chip-safe { background: rgba(220, 232, 255, 0.08); color: #DCE8FF; border: 1px solid rgba(220, 232, 255, 0.22); }
+    .og-chip-ok { background: rgba(61, 220, 151, 0.12); color: #7DEBB9; border: 1px solid rgba(61, 220, 151, 0.32); }
+    [data-testid="stPlotlyChart"] { border-radius: 16px; overflow: hidden; border: 1px solid rgba(120, 160, 255, 0.14); }
+
     /* ─── Scrollbar ──────────────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: rgba(13, 27, 42, 0.3); }
@@ -214,38 +251,7 @@ def inject_custom_css():
 inject_custom_css()
 
 
-# ─── Session State Initialization ─────────────────────────────────────────────
-if "model_loaded" not in st.session_state:
-    st.session_state.model_loaded = False
-if "celestrak_data" not in st.session_state:
-    st.session_state.celestrak_data = None
-if "last_refresh" not in st.session_state:
-    st.session_state.last_refresh = None
-
-
 # ─── Helper Functions ─────────────────────────────────────────────────────────
-@st.cache_data(ttl=300)
-def load_celestrak_data():
-    """Fetch and cache CelesTrak live data."""
-    from celestrak_fetcher import CelesTrakFetcher, compute_orbit_altitude_band
-
-    fetcher = CelesTrakFetcher()
-    active = fetcher.fetch_active_satellites()
-    debris = fetcher.fetch_all_debris()
-    stations = fetcher.fetch_stations()
-
-    if not active.empty:
-        active = compute_orbit_altitude_band(active)
-
-    return {
-        "active": active,
-        "debris": debris,
-        "stations": stations,
-        "timestamp": pd.Timestamp.now(tz="UTC"),
-        "summary": fetcher.get_catalog_summary(),
-    }
-
-
 @st.cache_resource
 def load_model():
     """Load the trained collision risk model."""
@@ -279,18 +285,173 @@ def predict_risk(model, df: pd.DataFrame) -> np.ndarray:
     return model.predict(model.preprocessor.transform(df))
 
 
-def get_risk_badge(risk_value: float) -> str:
-    """Return an HTML badge for a risk level."""
-    if risk_value >= -3.0:
-        return '<span style="background:#FF0040;color:white;padding:4px 12px;border-radius:20px;font-weight:600;font-size:0.85rem;">🔴 CRITICAL</span>'
-    elif risk_value >= -4.5:
-        return '<span style="background:#FF6B35;color:white;padding:4px 12px;border-radius:20px;font-weight:600;font-size:0.85rem;">🟠 HIGH</span>'
-    elif risk_value >= -6.0:
-        return '<span style="background:#FFD700;color:#1a1a1a;padding:4px 12px;border-radius:20px;font-weight:600;font-size:0.85rem;">🟡 MEDIUM</span>'
-    elif risk_value >= -7.5:
-        return '<span style="background:#00E676;color:#1a1a1a;padding:4px 12px;border-radius:20px;font-weight:600;font-size:0.85rem;">🟢 LOW</span>'
+# ─── Constants ────────────────────────────────────────────────────────────────
+LEVELS = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NEGLIGIBLE"]
+STATUSES = ["DANGER", "REVIEW", "SAFE", "MITIGATED"]
+STATUS_LABEL = {"DANGER": "🔴 DANGER", "REVIEW": "🟠 REVIEW", "SAFE": "⚪ SAFE", "MITIGATED": "🟢 MITIGATED"}
+LEVEL_LABEL = {"CRITICAL": "🔴 CRITICAL", "HIGH": "🟠 HIGH", "MEDIUM": "🟡 MEDIUM", "LOW": "🟢 LOW",
+               "NEGLIGIBLE": "🔵 NEGLIGIBLE"}
+G0 = 9.80665
+PLOT_LAYOUT = dict(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(20,20,40,0.8)",
+                   font=dict(family="Inter, sans-serif", color="white"))
+
+
+# ─── Session state ────────────────────────────────────────────────────────────
+for key, default in {
+    "refresh_nonce": 0,
+    "test_mode": False,
+    "threat": {"primary_id": 25544, "hours_to_tca": 18.0, "miss_m": 25.0, "crossing_deg": 70.0, "kind": "debris"},
+    "extra_watch": [],
+    "spacecraft": dict(DEFAULT_SPACECRAFT),
+}.items():
+    if key not in st.session_state:
+        st.session_state[key] = default
+
+
+# ─── Live data ────────────────────────────────────────────────────────────────
+def refresh_bucket() -> int:
+    return int(time.time() // DASHBOARD_REFRESH_INTERVAL)
+
+
+def threat_specs() -> list:
+    return [dict(st.session_state.threat)] if st.session_state.test_mode else []
+
+
+@st.cache_resource(max_entries=3, show_spinner=False)
+def get_live_state(bucket: int, nonce: int, extra_watch: tuple, threats_json: str):
+    from live_pipeline import run_live
+    return run_live(extra_watch=list(extra_watch), threat_specs=json.loads(threats_json), rescreen=nonce > 0)
+
+
+def live_state():
+    with st.spinner("📡 Updating orbits and screening the watchlist (about a minute when new orbit data arrives)…"):
+        return get_live_state(refresh_bucket() if st.session_state.refresh_nonce == 0 else 0,
+                              st.session_state.refresh_nonce, tuple(st.session_state.extra_watch),
+                              json.dumps(threat_specs(), sort_keys=True))
+
+
+def upcoming(conj: pd.DataFrame) -> pd.DataFrame:
+    if conj.empty:
+        return conj
+    return conj[pd.to_datetime(conj["TCA"], utc=True) > pd.Timestamp.now(tz="UTC")]
+
+
+def effective_status(conj: pd.DataFrame) -> pd.DataFrame:
+    """Mark conjunctions whose avoidance burn the operator accepted as MITIGATED."""
+    from decisions import latest
+    from manoeuvre_planner import conjunction_key
+    conj = conj.copy()
+    if conj.empty:
+        conj["KEY"], conj["DECISION"] = [], []
+        return conj
+    decided = latest()
+    conj["KEY"] = [conjunction_key(r) for _, r in conj.iterrows()]
+    conj["DECISION"] = [decided.get(k, {}).get("decision", "") for k in conj["KEY"]]
+    conj.loc[conj["DECISION"] == "ACCEPTED", "STATUS"] = "MITIGATED"
+    return conj
+
+
+def satellite_status(conj: pd.DataFrame, watch_ids: list) -> tuple[dict, dict]:
+    """Worst status per watchlist satellite and its worst open conjunction."""
+    order = {"DANGER": 3, "REVIEW": 2, "MITIGATED": 1, "SAFE": 0}
+    status, worst = {}, {}
+    for sid in watch_ids:
+        mine = conj[conj["PRIMARY_ID"] == sid] if not conj.empty else conj
+        if mine.empty:
+            status[sid] = "SAFE"
+            continue
+        status[sid] = max(mine["STATUS"], key=lambda s: order[s])
+        open_ = mine[mine["STATUS"].isin(["DANGER", "REVIEW"])]
+        if not open_.empty:
+            worst[sid] = open_.sort_values("LOG_PC", ascending=False).iloc[0]
+    return status, worst
+
+
+# ─── Background manoeuvre planning ────────────────────────────────────────────
+@st.cache_resource
+def plan_registry() -> dict:
+    return {}
+
+
+def _run_plans(state, events: pd.DataFrame, job: dict):
+    from manoeuvre_planner import conjunction_key
+    try:
+        planner = state.planner()
+        for _, row in events.iterrows():
+            key = conjunction_key(row)
+            try:
+                job["plans"][key] = planner.plan(row)
+            except Exception as e:  # keep planning the others
+                job["errors"][key] = f"{type(e).__name__}: {e}"
+            job["done"] += 1
+    finally:
+        job["running"] = False
+
+
+def plan_job(state) -> dict:
+    """Start (once per data version) background planning for every HIGH/CRITICAL conjunction."""
+    reg = plan_registry()
+    job_key = state.key + json.dumps(threat_specs(), sort_keys=True) + str(sorted(state.watch_ids))
+    if job_key not in reg:
+        events = upcoming(state.conjunctions)
+        events = events[events["STATUS"] == "DANGER"].sort_values("LOG_PC", ascending=False) \
+            if not events.empty else events
+        job = {"plans": {}, "errors": {}, "total": len(events), "done": 0, "running": True,
+               "started": time.time()}
+        reg[job_key] = job
+        threading.Thread(target=_run_plans, args=(state, events, job), daemon=True).start()
+    return reg[job_key]
+
+
+def option_cost(dv_ms: float) -> tuple[float, float]:
+    """Fuel (kg) and burn duration (s) for the operator's spacecraft settings."""
+    sc = st.session_state.spacecraft
+    return sc["mass_kg"] * (1 - np.exp(-dv_ms / (sc["isp_s"] * G0))), sc["mass_kg"] * dv_ms / sc["thrust_n"]
+
+
+# ─── Formatting ───────────────────────────────────────────────────────────────
+def conj_table(conj: pd.DataFrame) -> pd.DataFrame:
+    now = pd.Timestamp.now(tz="UTC")
+    tca = pd.to_datetime(conj["TCA"], utc=True)
+    df = pd.DataFrame({
+        "Status": conj["STATUS"].map(STATUS_LABEL),
+        "Risk": conj["RISK_LEVEL"].map(LEVEL_LABEL),
+        "Satellite": conj["PRIMARY_NAME"],
+        "Other object": conj["SECONDARY_NAME"],
+        "Type": conj["SECONDARY_TYPE"],
+        "TCA (UTC)": tca.dt.strftime("%Y-%m-%d %H:%M:%S"),
+        "Hours to TCA": ((tca - now).dt.total_seconds() / 3600).round(1),
+        "Miss (m)": (conj["MISS_KM"] * 1000).round(0),
+        "Radial (m)": conj["MISS_R_M"].round(0),
+        "Along-track (m)": conj["MISS_T_M"].round(0),
+        "Cross-track (m)": conj["MISS_N_M"].round(0),
+        "Speed (km/s)": conj["REL_SPEED_KMS"].round(2),
+        "log₁₀ Pc": conj["LOG_PC"].round(2),
+        "Worst-case log₁₀ Pc": conj["LOG_PC_MAX"].round(2),
+        "Pc source": conj["PC_SOURCE"],
+    })
+    if "OFFICIAL_PC" in conj and conj["OFFICIAL_PC"].notna().any():
+        df["Space-Track Pc"] = conj["OFFICIAL_PC"]
+    if "DECISION" in conj:
+        df["Operator decision"] = conj["DECISION"]
+    return df
+
+
+def status_banner(n_danger: int, n_review: int, n_safe: int, n_mitigated: int = 0):
+    """Summary strip above the globe: one tone-coloured headline plus status chips."""
+    if n_danger:
+        tone, head = "og-danger", (f"{n_danger} satellite{'s' if n_danger != 1 else ''} at high or critical risk "
+                                   f"in the next {PROPAGATION_WINDOW_HOURS} h — suggestions on the 🚀 Manoeuvre Planner")
+    elif n_review:
+        tone, head = "og-review", f"No high-risk events · {n_review} satellite{'s' if n_review != 1 else ''} to review"
     else:
-        return '<span style="background:#40C4FF;color:#1a1a1a;padding:4px 12px;border-radius:20px;font-weight:600;font-size:0.85rem;">🔵 NEGLIGIBLE</span>'
+        tone, head = "og-safe", "All watchlist satellites are safe for the screening window"
+    chips = (f'<span class="og-chip og-chip-danger">● {n_danger} danger</span>'
+             f'<span class="og-chip og-chip-review">● {n_review} review</span>'
+             f'<span class="og-chip og-chip-safe">● {n_safe} safe</span>'
+             + (f'<span class="og-chip og-chip-ok">● {n_mitigated} manoeuvre accepted</span>' if n_mitigated else ""))
+    st.markdown(f'<div class="og-banner {tone}"><div class="og-head">{head}</div><div>{chips}</div></div>',
+                unsafe_allow_html=True)
 
 
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -299,30 +460,45 @@ with st.sidebar:
     st.markdown("*AI-Powered Collision Risk Assessment*")
     st.markdown("---")
 
-    # Navigation
     page = st.radio(
         "🧭 Navigation",
         [
-            "🏠 Dashboard",
+            "🛰️ Mission Control",
             "🔴 Risk Alerts",
-            "🌍 Live Tracking",
-            "🧠 AI Explainability",
+            "🌍 3D Orbit View",
             "🚀 Manoeuvre Planner",
+            "🧠 AI Explainability",
             "📊 Model Performance",
+            "🧪 Validation",
             "⚙️ Settings",
         ],
         label_visibility="collapsed",
     )
 
     st.markdown("---")
-
-    # Data refresh
     st.markdown("### 📡 Data Status")
-    if st.button("🔄 Refresh CelesTrak Data", width="stretch"):
+    if st.button("🔄 Refresh Data", width="stretch"):
+        st.session_state.refresh_nonce += 1
         st.cache_data.clear()
         st.rerun()
 
-    # Model status
+    @st.fragment(run_every=60)
+    def auto_refresh():
+        """Re-runs the app when the refresh interval rolls over, so data updates without a click."""
+        bucket = refresh_bucket()
+        if st.session_state.get("seen_bucket") not in (None, bucket):
+            st.session_state.seen_bucket = bucket
+            st.session_state.refresh_nonce = 0
+            st.rerun(scope="app")
+        st.session_state.seen_bucket = bucket
+        left = DASHBOARD_REFRESH_INTERVAL - time.time() % DASHBOARD_REFRESH_INTERVAL
+        st.caption(f"Auto-refresh in {left / 60:.0f} min · new orbit data every 2 h")
+
+    auto_refresh()
+
+    if st.session_state.test_mode:
+        st.warning("🧪 Test mode: a simulated threat is injected")
+
     model, model_available = load_model()
     if model_available:
         st.success("✅ Model loaded")
@@ -337,7 +513,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown(
         "<div style='text-align:center;color:rgba(255,255,255,0.3);font-size:0.75rem;'>"
-        "OrbitGuard AI v1.0<br>RTX 4060 GPU Accelerated<br>"
+        "OrbitGuard AI v2.0<br>RTX 4060 GPU Accelerated<br>"
         "© 2026 OrbitGuard Team"
         "</div>",
         unsafe_allow_html=True,
@@ -345,135 +521,65 @@ with st.sidebar:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# DASHBOARD PAGE
+# MISSION CONTROL PAGE
 # ═══════════════════════════════════════════════════════════════════════════════
-if page == "🏠 Dashboard":
+if page == "🛰️ Mission Control":
     st.markdown("# 🛰️ OrbitGuard AI — Mission Control")
-    st.markdown("*Real-time collision risk assessment for Low Earth Orbit*")
+    st.markdown(f"*Live collision screening of important satellites for the next {PROPAGATION_WINDOW_HOURS} hours*")
 
-    # Live data loading
-    with st.spinner("📡 Fetching live orbital data from CelesTrak..."):
-        data = load_celestrak_data()
+    state = live_state()
+    conj = effective_status(upcoming(state.conjunctions))
+    status, worst = satellite_status(conj, state.watch_ids)
+    n_danger = sum(1 for s in status.values() if s == "DANGER")
+    n_review = sum(1 for s in status.values() if s == "REVIEW")
+    wx = state.weather
 
-    # ─── Key Metrics Row ──────────────────────────────────────────────────
-    col1, col2, col3, col4, col5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    c1.metric("🛰️ Objects tracked", f"{len(state.objects):,}")
+    c2.metric("⭐ Watchlist", len(state.watch_ids))
+    c3.metric("🔴 In danger", n_danger)
+    c4.metric("🟠 To review", n_review)
+    c5.metric("📋 Close approaches", f"{len(conj):,}")
+    c6.metric("☀️ F10.7 / Kp", f"{wx['F10']:.0f} / {wx['kp_max'] if wx.get('kp_max') is not None else '–'}")
+    st.caption(f"Orbits: {state.catalog.source} · screened {pd.Timestamp(state.t0):%Y-%m-%d %H:%M} UTC · "
+               f"space weather {wx.get('date') or 'fallback'} · "
+               f"{state.official_cdms} Space-Track official CDMs matched")
+    n_mitigated = sum(1 for v in status.values() if v == "MITIGATED")
+    status_banner(n_danger, n_review, len(status) - n_danger - n_review - n_mitigated, n_mitigated)
 
-    with col1:
-        active_count = len(data["active"]) if data["active"] is not None and not data["active"].empty else 0
-        st.metric("🛰️ Active Satellites", f"{active_count:,}")
+    f1, f2 = st.columns(2)
+    show_status = f1.multiselect("Status", STATUSES, default=STATUSES, key="mc_status")
+    show_levels = f2.multiselect("Risk level", LEVELS, default=LEVELS, key="mc_levels")
+    from live_pipeline import watchlist_summary
+    summary = watchlist_summary(state)
+    summary["STATUS"] = summary["NORAD_CAT_ID"].map(status)
+    view = summary[summary["STATUS"].isin(show_status) & summary["RISK_LEVEL"].isin(show_levels)]
 
-    with col2:
-        debris_count = len(data["debris"]) if data["debris"] is not None and not data["debris"].empty else 0
-        st.metric("💥 Tracked Debris", f"{debris_count:,}")
+    from orbit_visualizations import create_risk_orbit_view
+    now = pd.Timestamp.now(tz="UTC")
+    st.plotly_chart(create_risk_orbit_view(state.source, state.objects, view["NORAD_CAT_ID"].tolist(), status, worst,
+                                           now_s=(now - pd.Timestamp(state.t0)).total_seconds(),
+                                           when=now.to_pydatetime(), height=860),
+                    width="stretch", config={"displaylogo": False})
+    st.caption("Drag to rotate, scroll to zoom, hover for details, click legend entries to hide them. "
+               "Paths show the next orbit; dotted = the other object near closest approach, ✕ = closest-approach point.")
 
-    with col3:
-        station_count = len(data["stations"]) if data["stations"] is not None and not data["stations"].empty else 0
-        st.metric("🏗️ Space Stations", f"{station_count:,}")
-
-    with col4:
-        total = active_count + debris_count
-        st.metric("📊 Total Objects", f"{total:,}")
-
-    with col5:
-        st.metric("⏱️ Last Update", data["timestamp"].strftime("%H:%M UTC"))
-
-    st.markdown("---")
-
-    # ─── Orbit Distribution & Risk Overview ───────────────────────────────
-    col_left, col_right = st.columns([3, 2])
-
-    with col_left:
-        st.markdown("### 🌐 Orbital Population by Altitude")
-        if not data["active"].empty:
-            from orbit_visualizations import create_altitude_distribution
-            fig = create_altitude_distribution(data["active"])
-            st.plotly_chart(fig, width="stretch")
-
-    with col_right:
-        st.markdown("### 📋 Catalog Summary")
-        if data["summary"]:
-            summary_df = pd.DataFrame(
-                [{"Category": k, "Count": v} for k, v in data["summary"].items()]
-            ).sort_values("Count", ascending=False)
-            st.dataframe(
-                summary_df,
-                width="stretch",
-                hide_index=True,
-                height=400,
-            )
-
-    # ─── Recent Conjunction Analysis (from dataset) ───────────────────────
-    st.markdown("---")
-    st.markdown("### 🔍 Conjunction Analysis — Training Data Overview")
-
-    try:
-        sample_df = load_dataset_sample(10000)
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Risk distribution
-            fig = go.Figure()
-            fig.add_trace(go.Histogram(
-                x=sample_df["risk"],
-                nbinsx=80,
-                marker=dict(
-                    color="rgba(0,229,255,0.6)",
-                    line=dict(color="rgba(0,229,255,1)", width=1),
-                ),
-                hovertemplate="Risk: %{x:.2f}<br>Count: %{y}<extra></extra>",
-            ))
-
-            # Add risk threshold lines
-            for level, threshold, color in [
-                ("CRITICAL", -3.0, "#FF0040"),
-                ("HIGH", -4.5, "#FF6B35"),
-                ("MEDIUM", -6.0, "#FFD700"),
-            ]:
-                fig.add_vline(
-                    x=threshold, line_dash="dash", line_color=color,
-                    annotation_text=level, annotation_font=dict(color=color, size=10),
-                )
-
-            fig.update_layout(
-                title=dict(text="Collision Risk Distribution (log₁₀ Pc)", font=dict(size=14, color="white")),
-                xaxis_title="Risk (log₁₀ collision probability)",
-                yaxis_title="Count",
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(20,20,40,0.8)",
-                height=400,
-                font=dict(family="Inter, sans-serif", color="white"),
-            )
-            st.plotly_chart(fig, width="stretch")
-
-        with col2:
-            # Miss distance vs Risk scatter
-            fig = px.scatter(
-                sample_df.sample(min(2000, len(sample_df))),
-                x="miss_distance",
-                y="risk",
-                color="time_to_tca",
-                color_continuous_scale="Turbo",
-                opacity=0.5,
-                labels={
-                    "miss_distance": "Miss Distance (m)",
-                    "risk": "Risk (log₁₀ Pc)",
-                    "time_to_tca": "Time to TCA (days)",
-                },
-                title="Miss Distance vs. Collision Risk",
-            )
-            fig.update_layout(
-                template="plotly_dark",
-                paper_bgcolor="rgba(0,0,0,0)",
-                plot_bgcolor="rgba(20,20,40,0.8)",
-                height=400,
-                font=dict(family="Inter, sans-serif", color="white"),
-            )
-            st.plotly_chart(fig, width="stretch")
-
-    except Exception as e:
-        st.info(f"Dataset preview: {e}")
+    st.markdown("### ⭐ Risk of important satellites")
+    st.dataframe(
+        pd.DataFrame({
+            "Status": view["STATUS"].map(STATUS_LABEL),
+            "Satellite": view["SATELLITE"],
+            "NORAD": view["NORAD_CAT_ID"],
+            "Altitude (km)": view["ALTITUDE_KM"],
+            "Worst risk": view["RISK_LEVEL"].map(LEVEL_LABEL),
+            "Max log₁₀ Pc": view["MAX_LOG_PC"].round(2),
+            "Closest pass (km)": view["CLOSEST_KM"].round(3),
+            "Worst with": view["WORST_WITH"],
+            "When (UTC)": pd.to_datetime(view["WORST_TCA"], utc=True).dt.strftime("%d %b %H:%M"),
+            "Close approaches": view["CONJUNCTIONS"],
+        }),
+        width="stretch", hide_index=True, height=min(60 + 35 * len(view), 520),
+    )
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -481,226 +587,212 @@ if page == "🏠 Dashboard":
 # ═══════════════════════════════════════════════════════════════════════════════
 elif page == "🔴 Risk Alerts":
     st.markdown("# 🔴 Conjunction Risk Alerts")
-    st.markdown("*Ranked close approach events with AI-predicted collision probabilities*")
+    st.markdown("*Every close approach (< 10 km) of a watchlist satellite in the screening window*")
 
-    try:
-        sample_df = load_dataset_sample(5000)
+    state = live_state()
+    conj = effective_status(upcoming(state.conjunctions))
 
-        # Filter high-risk events
-        risk_threshold = st.slider(
-            "Risk Threshold (log₁₀ Pc)",
-            min_value=-15.0,
-            max_value=0.0,
-            value=-6.0,
-            step=0.5,
-        )
+    f1, f2, f3 = st.columns(3)
+    levels = f1.multiselect("Risk level", LEVELS, default=["CRITICAL", "HIGH", "MEDIUM"])
+    statuses = f2.multiselect("Status", STATUSES, default=STATUSES)
+    sats = f3.multiselect("Satellite", sorted(conj["PRIMARY_NAME"].unique()) if not conj.empty else [])
+    f4, f5, f6 = st.columns(3)
+    types = f4.multiselect("Other object type", ["PAYLOAD", "DEBRIS", "ROCKET BODY", "UNKNOWN"],
+                           default=["PAYLOAD", "DEBRIS", "ROCKET BODY", "UNKNOWN"])
+    max_hours = f5.slider("Within the next (hours)", 1, PROPAGATION_WINDOW_HOURS, PROPAGATION_WINDOW_HOURS)
+    max_miss = f6.slider("Miss distance under (km)", 0.1, 10.0, 10.0, 0.1)
 
-        if model_available:
-            sample_df = sample_df.copy()
-            sample_df["predicted_risk"] = predict_risk(model, sample_df)
-            risk_col = "predicted_risk"
-            st.caption("Ranked by **AI-predicted** risk; the CDM-reported risk is shown alongside.")
-        else:
-            risk_col = "risk"
-            st.caption("No trained model — ranked by CDM-reported risk.")
+    view = conj
+    if not view.empty:
+        hours = (pd.to_datetime(view["TCA"], utc=True) - pd.Timestamp.now(tz="UTC")).dt.total_seconds() / 3600
+        view = view[view["RISK_LEVEL"].isin(levels) & view["STATUS"].isin(statuses)
+                    & view["SECONDARY_TYPE"].fillna("UNKNOWN").isin(types)
+                    & (hours <= max_hours) & (view["MISS_KM"] <= max_miss)]
+        if sats:
+            view = view[view["PRIMARY_NAME"].isin(sats)]
+        view = view.sort_values("LOG_PC", ascending=False)
 
-        alerts_df = sample_df[sample_df[risk_col] >= risk_threshold].copy()
-        alerts_df = alerts_df.sort_values(risk_col, ascending=False).head(50)
+    c = st.columns(5)
+    for col, lvl in zip(c, LEVELS):
+        col.metric(LEVEL_LABEL[lvl], int((view["RISK_LEVEL"] == lvl).sum()) if not view.empty else 0)
 
-        st.markdown(f"### 📊 {len(alerts_df)} Events Above Threshold")
-
-        if not alerts_df.empty:
-            for idx, row in alerts_df.head(20).iterrows():
-                risk = row[risk_col]
-                cdm_note = f'CDM: <code>{row["risk"]:.3f}</code> &nbsp;|&nbsp; ' if model_available else ""
-                badge = get_risk_badge(risk)
-
-                if risk >= -3.0:
-                    css_class = "risk-critical"
-                elif risk >= -4.5:
-                    css_class = "risk-high"
-                elif risk >= -6.0:
-                    css_class = "risk-medium"
-                else:
-                    css_class = "risk-low"
-
-                st.markdown(
-                    f'<div class="{css_class}">'
-                    f'{badge} &nbsp; '
-                    f'<b>Event {row.get("event_id", idx)}</b> &nbsp;|&nbsp; '
-                    f'Risk: <code>{risk:.3f}</code> &nbsp;|&nbsp; {cdm_note}'
-                    f'Miss: <code>{row.get("miss_distance", 0):,.0f} m</code> &nbsp;|&nbsp; '
-                    f'TCA: <code>{row.get("time_to_tca", 0):.2f} days</code> &nbsp;|&nbsp; '
-                    f'Rel. Speed: <code>{row.get("relative_speed", 0):,.0f} m/s</code>'
-                    f'</div>',
-                    unsafe_allow_html=True,
-                )
-
-            # Summary stats
-            st.markdown("---")
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                critical = len(alerts_df[alerts_df[risk_col] >= -3.0])
-                st.metric("🔴 Critical", critical)
-            with col2:
-                high = len(alerts_df[(alerts_df[risk_col] >= -4.5) & (alerts_df[risk_col] < -3.0)])
-                st.metric("🟠 High", high)
-            with col3:
-                medium = len(alerts_df[(alerts_df[risk_col] >= -6.0) & (alerts_df[risk_col] < -4.5)])
-                st.metric("🟡 Medium", medium)
-            with col4:
-                low = len(alerts_df[alerts_df[risk_col] < -6.0])
-                st.metric("🟢 Low", low)
-
-    except Exception as e:
-        st.error(f"Error loading alerts: {e}")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# LIVE TRACKING PAGE
-# ═══════════════════════════════════════════════════════════════════════════════
-elif page == "🌍 Live Tracking":
-    st.markdown("# 🌍 Live Satellite Tracking")
-    st.markdown("*Real-time CelesTrak orbital data with 3D visualization*")
-
-    with st.spinner("📡 Fetching live data..."):
-        data = load_celestrak_data()
-
-    if not data["active"].empty:
-        tab1, tab2, tab3 = st.tabs(["🔍 Search & Explore", "🌐 3D Orbit View", "📊 Statistics"])
-
-        with tab1:
-            search = st.text_input("🔍 Search satellite by name or NORAD ID")
-
-            display_df = data["active"].copy()
-            if search:
-                mask = (
-                    display_df["OBJECT_NAME"].str.contains(search, case=False, na=False) |
-                    display_df["NORAD_CAT_ID"].astype(str).str.contains(search, na=False)
-                )
-                display_df = display_df[mask]
-
-            st.markdown(f"**Showing {len(display_df):,} satellites**")
-
-            # Select columns to display
-            display_cols = [
-                "OBJECT_NAME", "NORAD_CAT_ID", "INCLINATION",
-                "ECCENTRICITY", "MEAN_MOTION", "EPOCH", "ORBIT_BAND",
-            ]
-            available_cols = [c for c in display_cols if c in display_df.columns]
-            st.dataframe(
-                display_df[available_cols].head(200),
-                width="stretch",
-                hide_index=True,
-                height=500,
-            )
-
-        with tab2:
-            st.markdown("### 🌐 3D Orbit Visualization")
-
-            # Let user select satellites to visualize
-            sat_names = data["active"]["OBJECT_NAME"].head(100).tolist()
-            selected_sats = st.multiselect(
-                "Select satellites to visualize (max 5)",
-                sat_names,
-                default=sat_names[:2] if len(sat_names) >= 2 else sat_names[:1],
-                max_selections=5,
-            )
-
-            if selected_sats:
-                from orbit_visualizations import (
-                    create_3d_earth, create_orbit_3d,
-                    create_satellite_marker, mean_motion_to_sma,
-                )
-
-                fig = go.Figure()
-                fig.add_trace(create_3d_earth())
-
-                colors = ["#00E5FF", "#FF6B35", "#7C4DFF", "#00E676", "#FFD700"]
-
-                for i, sat_name in enumerate(selected_sats):
-                    sat_data = data["active"][data["active"]["OBJECT_NAME"] == sat_name].iloc[0]
-                    sma = mean_motion_to_sma(sat_data.get("MEAN_MOTION", 14))
-
-                    fig.add_trace(create_orbit_3d(
-                        sma, sat_data.get("ECCENTRICITY", 0),
-                        sat_data.get("INCLINATION", 0),
-                        sat_data.get("RA_OF_ASC_NODE", 0),
-                        sat_data.get("ARG_OF_PERICENTER", 0),
-                        name=sat_name, color=colors[i % len(colors)],
-                    ))
-
-                    fig.add_trace(create_satellite_marker(
-                        sma, sat_data.get("ECCENTRICITY", 0),
-                        sat_data.get("INCLINATION", 0),
-                        sat_data.get("RA_OF_ASC_NODE", 0),
-                        sat_data.get("ARG_OF_PERICENTER", 0),
-                        sat_data.get("MEAN_ANOMALY", 0),
-                        name=sat_name, color=colors[i % len(colors)],
-                    ))
-
-                fig.update_layout(
-                    scene=dict(
-                        xaxis=dict(showgrid=False, showticklabels=False, title="", showbackground=False),
-                        yaxis=dict(showgrid=False, showticklabels=False, title="", showbackground=False),
-                        zaxis=dict(showgrid=False, showticklabels=False, title="", showbackground=False),
-                        bgcolor="rgba(5,5,15,1)",
-                        aspectmode="data",
-                    ),
-                    paper_bgcolor="rgba(5,5,15,1)",
-                    height=700,
-                    margin=dict(l=0, r=0, t=20, b=0),
-                    legend=dict(font=dict(color="white"), bgcolor="rgba(20,20,40,0.7)"),
-                )
-                st.plotly_chart(fig, width="stretch")
-
-        with tab3:
-            st.markdown("### 📊 Orbital Statistics")
-            if "ORBIT_BAND" in data["active"].columns:
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    band_counts = data["active"]["ORBIT_BAND"].value_counts()
-                    fig = go.Figure(go.Pie(
-                        labels=band_counts.index,
-                        values=band_counts.values,
-                        hole=0.5,
-                        marker=dict(colors=["#00E5FF", "#FFD700", "#FF6B35", "#7C4DFF", "#888"]),
-                        textinfo="label+percent",
-                        textfont=dict(color="white"),
-                    ))
-                    fig.update_layout(
-                        title=dict(text="Orbit Band Distribution", font=dict(color="white", size=14)),
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(0,0,0,0)",
-                        height=400,
-                        font=dict(family="Inter, sans-serif", color="white"),
-                        legend=dict(font=dict(color="white")),
-                    )
-                    st.plotly_chart(fig, width="stretch")
-
-                with col2:
-                    # Inclination distribution
-                    fig = go.Figure()
-                    fig.add_trace(go.Histogram(
-                        x=data["active"]["INCLINATION"],
-                        nbinsx=60,
-                        marker=dict(color="rgba(124,77,255,0.6)", line=dict(color="#7C4DFF", width=1)),
-                    ))
-                    fig.update_layout(
-                        title=dict(text="Inclination Distribution", font=dict(color="white", size=14)),
-                        xaxis_title="Inclination (°)",
-                        yaxis_title="Count",
-                        template="plotly_dark",
-                        paper_bgcolor="rgba(0,0,0,0)",
-                        plot_bgcolor="rgba(20,20,40,0.8)",
-                        height=400,
-                        font=dict(family="Inter, sans-serif", color="white"),
-                    )
-                    st.plotly_chart(fig, width="stretch")
-
+    st.markdown(f"### 📋 {len(view):,} close approaches")
+    if view.empty:
+        st.info("No close approaches match these filters.")
     else:
-        st.warning("Could not fetch live satellite data. Check your internet connection.")
+        st.dataframe(conj_table(view), width="stretch", hide_index=True, height=520,
+                     column_config={"Space-Track Pc": st.column_config.NumberColumn(format="%.2e")})
+        st.caption("Pc = probability of collision. Our Pc uses public orbits (SGP4) with uncertainty from the ML "
+                   "model plus assumed TLE error; Space-Track's official Pc replaces it when a public CDM exists. "
+                   "Worst-case Pc assumes the least favourable uncertainty size.")
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# 3D ORBIT VIEW PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+elif page == "🌍 3D Orbit View":
+    st.markdown("# 🌍 3D Orbit View")
+    state = live_state()
+    conj = effective_status(upcoming(state.conjunctions))
+    status, worst = satellite_status(conj, state.watch_ids)
+
+    tab1, tab2 = st.tabs(["🌐 Risk View", "🔍 Catalogue"])
+    with tab1:
+        names = {sid: state.objects.loc[sid, "OBJECT_NAME"] for sid in state.watch_ids}
+        only_risk = st.toggle("Show only satellites at risk", value=False)
+        default = [s for s in state.watch_ids if not only_risk or status.get(s) in ("DANGER", "REVIEW")]
+        chosen = st.multiselect("Satellites", state.watch_ids, default=default, format_func=lambda s: names[s])
+
+        from decisions import latest
+        from orbit_propagation import burn_offset
+        planned = {}
+        for entry in latest().values():
+            opt = entry.get("option")
+            if entry["decision"] != "ACCEPTED" or not opt or opt.get("mover_id") not in chosen:
+                continue
+            burn_s = (pd.Timestamp(opt["burn_time"]) - pd.Timestamp(state.t0)).total_seconds()
+            tca_s = (pd.Timestamp(entry["tca"]) - pd.Timestamp(state.t0)).total_seconds()
+            if tca_s < 0:
+                continue
+            r, v = state.source.state(opt["mover_id"], burn_s)
+            if np.all(np.isfinite(r)):
+                off = burn_offset(np.concatenate([r[0], v[0]]), burn_s, np.array(opt["dv_rtn_ms"]),
+                                  tca_s + 6000.0)
+                planned[opt["mover_id"]] = (off, burn_s, tca_s)
+
+        from orbit_visualizations import create_risk_orbit_view
+        now = pd.Timestamp.now(tz="UTC")
+        st.plotly_chart(create_risk_orbit_view(state.source, state.objects, chosen, status, worst, planned,
+                                               now_s=(now - pd.Timestamp(state.t0)).total_seconds(),
+                                               when=now.to_pydatetime(), height=900),
+                        width="stretch", config={"displaylogo": False})
+        st.caption("Paths show the next orbit from now. For red/orange satellites the other object's path "
+                   "±15 min around the closest approach is dashed, and ✕ marks the closest-approach point.")
+
+    with tab2:
+        search = st.text_input("🔍 Search by name or NORAD ID")
+        cat = state.objects.reset_index(names="NORAD_CAT_ID")
+        if search:
+            cat = cat[cat["OBJECT_NAME"].str.contains(search, case=False, na=False)
+                      | cat["NORAD_CAT_ID"].astype(str).str.contains(search)]
+        st.markdown(f"**{len(cat):,} objects** · source: {state.catalog.source}")
+        st.dataframe(cat[["NORAD_CAT_ID", "OBJECT_NAME", "OBJECT_TYPE", "OWNER", "PERIGEE_KM", "APOGEE_KM",
+                          "INCLINATION", "EPOCH_AGE_DAYS", "RADIUS_M", "MANOEUVRABLE"]].head(500).round(2),
+                     width="stretch", hide_index=True, height=480)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# MANOEUVRE PLANNER PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+elif page == "🚀 Manoeuvre Planner":
+    st.markdown("# 🚀 Collision Avoidance Manoeuvre Planner")
+    st.markdown(f"*Automatic burn suggestions for every HIGH/CRITICAL conjunction — target: risk below "
+                f"10^{MANOEUVRE_TARGET_LOG_PC:.0f} and at least {MANOEUVRE_TARGET_MISS_KM:g} km apart, "
+                f"without creating new high-risk approaches*")
+
+    with st.expander("⚙️ Spacecraft parameters (used for fuel and burn duration)", expanded=False):
+        sc = st.session_state.spacecraft
+        c1, c2, c3 = st.columns(3)
+        sc["mass_kg"] = c1.number_input("Mass (kg)", 10.0, 500000.0, float(sc["mass_kg"]), 10.0)
+        sc["isp_s"] = c2.number_input("Thruster Isp (s)", 50.0, 5000.0, float(sc["isp_s"]), 10.0)
+        sc["thrust_n"] = c3.number_input("Thrust (N)", 0.001, 5000.0, float(sc["thrust_n"]), 0.1)
+
+    state = live_state()
+    job = plan_job(state)
+
+    from decisions import latest, history, record
+
+    @st.fragment(run_every=5 if job["running"] else None)
+    def planner_view():
+        conj = effective_status(upcoming(state.conjunctions))
+        events = conj[conj["STATUS"].isin(["DANGER", "MITIGATED"])].sort_values("LOG_PC", ascending=False) \
+            if not conj.empty else conj
+        if job["running"]:
+            st.progress(job["done"] / max(job["total"], 1),
+                        text=f"Planning manoeuvres… {job['done']} of {job['total']} conjunctions done")
+        if events.empty:
+            st.success("No HIGH or CRITICAL conjunctions — no manoeuvre needed.")
+            return
+        decided = latest()
+        for _, ev in events.iterrows():
+            key = ev["KEY"]
+            plan = job["plans"].get(key)
+            box = st.container(border=True)
+            css = "risk-low" if ev["STATUS"] == "MITIGATED" else "risk-critical"
+            box.markdown(
+                f'<div class="{css}"><b>{STATUS_LABEL[ev["STATUS"]]} · {LEVEL_LABEL[ev["RISK_LEVEL"]]}</b> &nbsp; '
+                f'<b>{ev["PRIMARY_NAME"]}</b> vs <b>{ev["SECONDARY_NAME"]}</b> ({ev["SECONDARY_TYPE"]}) &nbsp;|&nbsp; '
+                f'TCA <code>{pd.Timestamp(ev["TCA"]):%Y-%m-%d %H:%M:%S} UTC</code> &nbsp;|&nbsp; '
+                f'miss <code>{ev["MISS_KM"] * 1000:,.0f} m</code> &nbsp;|&nbsp; '
+                f'log₁₀ Pc <code>{ev["LOG_PC"]:.2f}</code> &nbsp;|&nbsp; '
+                f'speed <code>{ev["REL_SPEED_KMS"]:.1f} km/s</code></div>', unsafe_allow_html=True)
+            if plan is None:
+                msg = job["errors"].get(key)
+                if msg:
+                    box.error(f"Planning failed: {msg}")
+                else:
+                    box.info("⏳ Computing manoeuvre options…")
+                continue
+
+            box.markdown(f"**Suggestion:** {plan.summary}")
+            options = [o for o in [plan.recommended, plan.alternative] if o is not None]
+            options += [o for o in plan.primary_options + plan.secondary_options
+                        if o.verified_miss_km is not None and o not in options][:6]
+            if options:
+                rows = []
+                for i, o in enumerate(options):
+                    fuel, dur = option_cost(o.dv_ms)
+                    rows.append({
+                        "Option": "⭐ Recommended" if o is plan.recommended else ("Alternative" if o is plan.alternative else f"Option {i + 1}"),
+                        "Who moves": f"{o.mover_name} ({'this satellite' if o.role == 'primary' else 'other operator'})",
+                        "Burn time (UTC)": f"{o.burn_time:%Y-%m-%d %H:%M:%S}",
+                        "Lead": f"{o.lead_orbits:g} orbits ({o.lead_hours:.1f} h)",
+                        "Direction": o.direction,
+                        "ΔV (cm/s)": round(o.dv_ms * 100, 2),
+                        "Burn time (s)": round(dur, 1),
+                        "Fuel (g)": round(fuel * 1000, 1),
+                        "Altitude change (m)": round(o.delta_sma_km * 1000),
+                        "New miss (km)": round(o.verified_miss_km if o.verified_miss_km is not None else o.new_miss_km, 2),
+                        "New log₁₀ Pc": round(o.verified_log_pc if o.verified_log_pc is not None else o.new_log_pc, 2),
+                        "New conflicts": ("none" if o.clean else (f"{len(o.conflicts)} high-risk" if o.conflict_checked else "not checked")),
+                    })
+                box.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+            for note in plan.notes:
+                box.caption(f"ℹ️ {note}")
+            if plan.recommended and plan.recommended.conflicts:
+                box.dataframe(pd.DataFrame(plan.recommended.conflicts), width="stretch", hide_index=True)
+
+            prior = decided.get(key)
+            if prior:
+                icon = "✅" if prior["decision"] == "ACCEPTED" else "❌"
+                box.markdown(f"{icon} **{prior['decision']}** at {prior['time']} UTC"
+                             + (f" — {prior['option']['direction']} {prior['option']['dv_ms'] * 100:.2f} cm/s"
+                                if prior.get("option") else ""))
+            if options:
+                labels = [f"{r['Option']}: {r['Who moves']}, {r['Direction']} {r['ΔV (cm/s)']} cm/s at {r['Burn time (UTC)']}"
+                          for r in rows]
+                pick = labels.index(box.selectbox("Option", labels, key=f"opt_{key}"))
+                note = box.text_input("Operator note (optional)", key=f"note_{key}")
+                b1, b2 = box.columns(2)
+                if b1.button("✅ Accept", key=f"acc_{key}", width="stretch"):
+                    record(plan, options[pick], "ACCEPTED", note)
+                    st.rerun(scope="app")
+                if b2.button("❌ Decline", key=f"dec_{key}", width="stretch"):
+                    record(plan, options[pick], "DECLINED", note)
+                    st.rerun(scope="app")
+
+    planner_view()
+
+    hist = history()
+    if hist:
+        st.markdown("### 🗂️ Decision log")
+        st.dataframe(pd.DataFrame([{
+            "Time (UTC)": h["time"], "Decision": h["decision"], "Satellite": h["primary"], "Other": h["secondary"],
+            "TCA": h["tca"], "Moves": (h.get("option") or {}).get("mover_name"),
+            "Direction": (h.get("option") or {}).get("direction"),
+            "ΔV (cm/s)": round((h.get("option") or {}).get("dv_ms", 0) * 100, 2), "Note": h.get("note", ""),
+        } for h in reversed(hist)]), width="stretch", hide_index=True)
+        st.caption("Saved to logs/manoeuvre_decisions.jsonl. Accepted burns appear as green dashed paths in the 3D view.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -775,114 +867,29 @@ elif page == "🧠 AI Explainability":
             st.error(f"Explainability error: {e}")
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# MANOEUVRE PLANNER PAGE
-# ═══════════════════════════════════════════════════════════════════════════════
-elif page == "🚀 Manoeuvre Planner":
-    st.markdown("# 🚀 Collision Avoidance Manoeuvre Planner")
-    st.markdown("*Simulate delta-V burns and evaluate risk/fuel trade-offs*")
-
-    from manoeuvre_simulator import ManoeuvreSimulator
-
-    col1, col2 = st.columns([1, 1])
-
-    with col1:
-        st.markdown("### ⚙️ Spacecraft Parameters")
-        mass = st.number_input("Spacecraft Mass (kg)", 50.0, 10000.0, 500.0, 50.0)
-        isp = st.number_input("Thruster Isp (s)", 50.0, 500.0, 220.0, 10.0)
-
-    with col2:
-        st.markdown("### 📐 Conjunction Parameters")
-        miss_dist = st.number_input("Miss Distance (m)", 10.0, 100000.0, 500.0, 10.0)
-        rel_speed = st.number_input("Relative Speed (m/s)", 100.0, 20000.0, 13000.0, 100.0)
-        time_to_tca = st.number_input("Time to TCA (hours)", 1.0, 168.0, 48.0, 1.0)
-        sigma_m = st.number_input("Combined Position Uncertainty σ (m)", 1.0, 50000.0, 200.0, 10.0)
-        current_risk = st.slider("Current Risk (log₁₀ Pc)", -15.0, 0.0, -4.0, 0.5)
-
-    if st.button("🚀 Run Manoeuvre Analysis", width="stretch"):
-        predict_fn = model.predict if model_available else None
-        sim = ManoeuvreSimulator(
-            predict_fn=predict_fn,
-            spacecraft_mass_kg=mass,
-            isp_s=isp,
-        )
-
-        # Create synthetic feature vector
-        n_features = len(model.feature_names) if model_available else 100
-        features = np.zeros(n_features, dtype=np.float32)
-
-        feature_names = model.feature_names if model_available else (
-            ["miss_distance", "relative_speed", "time_to_tca", "combined_uncertainty"]
-            + [f"f{i}" for i in range(4, n_features)]
-        )
-
-        # Set known values (CDM units: metres, m/s, days)
-        for fname, fval in [
-            ("miss_distance", miss_dist),
-            ("relative_speed", rel_speed),
-            ("time_to_tca", time_to_tca / 24.0),
-            ("combined_uncertainty", sigma_m),
-        ]:
-            if fname in feature_names:
-                features[feature_names.index(fname)] = fval
-
-        # The hand-entered conjunction is not a full CDM, so use the user's risk
-        report = sim.analyse_conjunction(
-            features, feature_names,
-            event_id="MANUAL",
-            original_risk=current_risk,
-        )
-
-        # Display results
-        from orbit_visualizations import create_risk_gauge
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("### Current Risk")
-            fig = create_risk_gauge(current_risk)
-            st.plotly_chart(fig, width="stretch")
-
-        with col2:
-            if report.best_option:
-                st.markdown("### Best Option Risk")
-                fig = create_risk_gauge(report.best_option.residual_risk)
-                st.caption(
-                    f"{report.best_option.direction} burn, ΔV {report.best_option.delta_v_ms} m/s, "
-                    f"{report.best_option.delta_v_fuel_kg:.3f} kg fuel"
-                )
-                st.plotly_chart(fig, width="stretch")
-
-        st.markdown("---")
-        st.markdown("### 📋 Manoeuvre Options (Ranked by Effectiveness)")
-
-        results_df = sim.report_to_dataframe(report)
-        results_df = results_df.sort_values("Risk Reduction %", ascending=False)
-
-        st.dataframe(
-            results_df,
-            width="stretch",
-            hide_index=True,
-            height=400,
-        )
-
-        # Fuel vs Risk Reduction chart
-        fig = px.scatter(
-            results_df,
-            x="Fuel (kg)",
-            y="Risk Reduction %",
-            color="Direction",
-            size="ΔV (m/s)",
-            hover_data=["Recommendation"],
-            title="Fuel Cost vs. Risk Reduction",
-        )
-        fig.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(20,20,40,0.8)",
-            height=400,
-            font=dict(family="Inter, sans-serif", color="white"),
-        )
+    # ─── Live uncertainty model ──────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("### 🌦️ Live uncertainty model — what drives orbit uncertainty")
+    st.markdown("Public orbit data has no uncertainty, so OrbitGuard predicts it from altitude, object type, size, "
+                "time to closest approach, time since last observation and **space weather**. "
+                "Bars show each input's share of the model's gain for each predicted quantity.")
+    from uncertainty_model import UncertaintyModel
+    if UncertaintyModel.exists():
+        um = UncertaintyModel.load()
+        imp = um.feature_importance()
+        imp = imp / imp.sum(axis=0)
+        names = {"log_sigma_r": "radial σ", "log_sigma_t": "along-track σ", "log_sigma_n": "cross-track σ",
+                 "corr_tr": "corr R–T", "corr_nr": "corr R–N", "corr_nt": "corr T–N"}
+        long = imp.rename(columns=names).reset_index(names="input").melt(id_vars="input", var_name="output",
+                                                                          value_name="share")
+        fig = px.bar(long, x="share", y="input", color="output", orientation="h", barmode="group", height=520)
+        fig.update_layout(**PLOT_LAYOUT, xaxis_tickformat=".0%")
         st.plotly_chart(fig, width="stretch")
+        wx_share = imp.loc[[c for c in ["F10", "F3M", "SSN", "AP"] if c in imp.index]].sum()
+        st.caption("Space weather (F10.7, its 81-day mean, sunspot number, Ap) share: "
+                   + ", ".join(f"{names[k]} {v:.0%}" for k, v in wx_share.items()))
+    else:
+        st.info("Train it with `python uncertainty_model.py`.")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1009,12 +1016,152 @@ elif page == "📊 Model Performance":
         """)
 
 
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VALIDATION PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+elif page == "🧪 Validation":
+    st.markdown("# 🧪 Validation — is the risk and manoeuvre logic correct?")
+    st.markdown("Run `python validate.py` (about 5 minutes) to regenerate this report, and `python -m pytest tests` "
+                "for the fast unit checks.")
+    report_path = EXPORT_DIR / "validation_report.json"
+    if not report_path.exists():
+        st.warning("No validation report yet. Run `python validate.py`.")
+    else:
+        report = json.loads(report_path.read_text())
+        checks = report["checks"]
+        passed = sum(1 for c in checks if c["passed"])
+        skipped = sum(1 for c in checks if c["passed"] is None)
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Checks passed", f"{passed} / {len(checks) - skipped}")
+        c2.metric("Skipped", skipped, help="Space-Track checks need credentials")
+        c3.metric("Generated", report["generated_at"][:16].replace("T", " ") + " UTC")
+        for section in dict.fromkeys(c["section"] for c in checks):
+            st.markdown(f"### {section}")
+            for c in [c for c in checks if c["section"] == section]:
+                box = st.container(border=True)
+                icon = {True: "✅", False: "❌", None: "⏭️"}[c["passed"]]
+                box.markdown(f"{icon} **{c['name']}**")
+                box.caption(c["what"])
+                box.markdown(f"Result: **{c['result']}** · Pass rule: {c['criterion']}")
+                if c.get("table"):
+                    box.dataframe(pd.DataFrame(c["table"]), width="stretch", hide_index=True)
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # SETTINGS PAGE
 # ═══════════════════════════════════════════════════════════════════════════════
 elif page == "⚙️ Settings":
     st.markdown("# ⚙️ Settings")
+    import spacetrack_client
+    from space_weather import load_space_weather, storm_level
 
+    st.markdown("### 📡 Data sources")
+    state = live_state()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Orbit catalogue", state.catalog.source.split(" (")[0], f"{len(state.catalog.objects):,} objects")
+    c2.metric("Space-Track", "connected" if spacetrack_client.is_configured() else "not configured",
+              f"{state.official_cdms} official CDMs matched")
+    c3.metric("Space weather", state.weather.get("date") or "fallback", storm_level(state.weather.get("kp_max")))
+    if not spacetrack_client.is_configured():
+        st.info("To use Space-Track (full catalogue + official conjunction messages), create a free account at "
+                "space-track.org and add a `.env` file in the project folder:\n\n"
+                "```\nSPACETRACK_USER=you@example.com\nSPACETRACK_PASSWORD=your-password\n```\n"
+                "`.env` is git-ignored. Restart the app afterwards.")
+
+    sw = load_space_weather()
+    if not sw.empty:
+        recent = sw[sw["AP_AVG"].notna() & (sw.index <= pd.Timestamp.now().normalize())].tail(120)  # observed only
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=recent.index, y=recent["F10.7_OBS"], name="F10.7 (sfu)", line=dict(color="#FFD700")))
+        fig.add_trace(go.Bar(x=recent.index, y=recent["AP_AVG"], name="Ap", yaxis="y2", marker_color="rgba(124,77,255,0.6)"))
+        fig.update_layout(**PLOT_LAYOUT, height=320, title="Space weather — last 120 days",
+                          yaxis=dict(title="F10.7"), yaxis2=dict(title="Ap", overlaying="y", side="right"))
+        st.plotly_chart(fig, width="stretch")
+
+    st.markdown("---")
+    st.markdown("### ⭐ Watchlist")
+    st.caption(f"{len(IMPORTANT_SATELLITES)} important satellites are always screened (config.IMPORTANT_SATELLITES). "
+               "Add more here; each extra satellite adds a few seconds to screening.")
+    payloads = state.catalog.objects[state.catalog.objects["OBJECT_TYPE"] == "PAYLOAD"]
+    options = [i for i in payloads.index if i not in IMPORTANT_SATELLITES]
+    extra = st.multiselect("Extra satellites", options, default=st.session_state.extra_watch,
+                           format_func=lambda i: f"{payloads.loc[i, 'OBJECT_NAME']} ({i})")
+    if extra != st.session_state.extra_watch:
+        st.session_state.extra_watch = extra
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 🧪 Test scenario")
+    st.caption("Injects a simulated object on a known collision course with a watchlist satellite, so you can see "
+               "the red alert, the 3D path and the manoeuvre suggestion end to end. Real data is not changed.")
+    t = dict(st.session_state.threat)
+    enabled = st.toggle("Inject a simulated threat", value=st.session_state.test_mode)
+    names = {sid: state.catalog.objects.loc[sid, "OBJECT_NAME"] for sid in state.catalog.watchlist_ids()}
+    c1, c2 = st.columns(2)
+    t["primary_id"] = c1.selectbox("Satellite", list(names), index=list(names).index(t["primary_id"]) if t["primary_id"] in names else 0,
+                                   format_func=lambda s: names[s])
+    t["kind"] = c2.radio("Threat", ["debris", "satellite"], index=0 if t["kind"] == "debris" else 1, horizontal=True,
+                         format_func=lambda k: "Debris (cannot move)" if k == "debris" else "Working satellite (can move)")
+    c3, c4, c5 = st.columns(3)
+    t["hours_to_tca"] = c3.slider("Hours until closest approach", 3.0, 60.0, float(t["hours_to_tca"]), 1.0)
+    t["miss_m"] = c4.slider("Miss distance (m)", 0.0, 2000.0, float(t["miss_m"]), 5.0)
+    t["crossing_deg"] = c5.slider("Crossing angle (°)", 10.0, 170.0, float(t["crossing_deg"]), 5.0)
+    if enabled != st.session_state.test_mode or t != st.session_state.threat:
+        st.session_state.test_mode, st.session_state.threat = enabled, t
+        st.rerun()
+
+    st.markdown("---")
+    st.markdown("### 🎯 Model accuracy")
+    from collision_model import EVAL_PATH
+    if EVAL_PATH.exists():
+        ev = json.loads(EVAL_PATH.read_text())
+        st.markdown("**CDM risk model (XGBoost, 118 features)** — scored on the same event-grouped train / "
+                    "validation split used in training and on the held-out test file.")
+        cols = st.columns(3)
+        for col, split in zip(cols, ["train", "validation", "test"]):
+            m = ev[split]
+            col.metric(f"{split.title()} R²", f"{m['r2']:.4f}", help=f"{m['rows']:,} rows")
+            col.metric(f"{split.title()} alert accuracy", f"{m['alert_accuracy']:.2%}",
+                       help="Share of rows where the model and ESA agree on high risk (log10 Pc ≥ −4.5) or not")
+        st.dataframe(pd.DataFrame([{
+            "Split": split.title(), "Rows": f"{m['rows']:,}", "R²": round(m["r2"], 4),
+            "RMSE (log₁₀ Pc)": round(m["rmse"], 3), "MAE (log₁₀ Pc)": round(m["mae"], 3),
+            "Alert accuracy": f"{m['alert_accuracy']:.2%}", "Alert precision": f"{m['alert_precision']:.3f}",
+            "Alert recall": f"{m['alert_recall']:.3f}", "Alert F1": f"{m['alert_f1']:.3f}",
+        } for split, m in ev.items()]), width="stretch", hide_index=True)
+        st.caption("Alert accuracy is high partly because only 1–2% of rows are high-risk; precision and recall "
+                   "show how well those rare alerts are caught.")
+    else:
+        st.info("Score the CDM model on train / validation / test with "
+                "`python -c \"from collision_model import evaluate_splits; evaluate_splits()\"`.")
+
+    from uncertainty_model import UNCERTAINTY_DIR
+    um_meta = UNCERTAINTY_DIR / "meta.json"
+    if um_meta.exists():
+        um = json.loads(um_meta.read_text())["metrics"]
+        st.markdown("**Live uncertainty model** — typical error on held-out CDMs (as a factor; 1.5× = within 50%), "
+                    "compared with a per-object-type baseline.")
+        st.dataframe(pd.DataFrame([{
+            "Predicts": label, "ML error": f"{10 ** um[k + '_mae']:.2f}×",
+            "Baseline error": f"{10 ** um[k + '_baseline_mae']:.2f}×",
+        } for k, label in [("log_sigma_r", "Radial uncertainty"), ("log_sigma_t", "Along-track uncertainty"),
+                           ("log_sigma_n", "Cross-track uncertainty")]]), width="stretch", hide_index=True)
+
+    report_path = EXPORT_DIR / "validation_report.json"
+    if report_path.exists():
+        rep = json.loads(report_path.read_text())
+        checks = rep["checks"]
+        ok = sum(1 for c in checks if c["passed"])
+        skipped = sum(1 for c in checks if c["passed"] is None)
+        a1 = next((c for c in checks if c["name"].startswith("A1")), None)
+        st.markdown(f"**Validation** ({rep['generated_at'][:10]}): {ok} of {len(checks) - skipped} checks passed"
+                    + (f", {skipped} skipped" if skipped else "")
+                    + (f" · risk engine vs ESA: {a1['result']}" if a1 else "") + " — details on the 🧪 Validation page.")
+    else:
+        st.caption("Validation not run yet — `python validate.py`.")
+
+    st.markdown("---")
     st.markdown("### 🖥️ GPU Status")
     try:
         import subprocess
@@ -1027,27 +1174,25 @@ elif page == "⚙️ Settings":
             parts = result.stdout.strip().split(", ")
             if len(parts) >= 6:
                 col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("🖥️ GPU", parts[0])
-                    st.metric("🌡️ Temperature", f"{parts[4]}°C")
-                with col2:
-                    st.metric("💾 VRAM Total", f"{parts[1]} MB")
-                    st.metric("📊 VRAM Used", f"{parts[2]} MB")
-                with col3:
-                    st.metric("📈 GPU Utilization", f"{parts[5]}%")
-                    st.metric("💾 VRAM Free", f"{parts[3]} MB")
+                col1.metric("🖥️ GPU", parts[0])
+                col1.metric("🌡️ Temperature", f"{parts[4]}°C")
+                col2.metric("💾 VRAM Total", f"{parts[1]} MB")
+                col2.metric("📊 VRAM Used", f"{parts[2]} MB")
+                col3.metric("📈 GPU Utilization", f"{parts[5]}%")
+                col3.metric("💾 VRAM Free", f"{parts[3]} MB")
     except Exception:
         st.info("GPU info unavailable")
 
     st.markdown("---")
-    st.markdown("### 📡 CelesTrak Configuration")
-
-    from config import CELESTRAK_GROUPS
-    st.markdown("**Tracked Orbital Groups:**")
-    for key, name in CELESTRAK_GROUPS.items():
-        st.markdown(f"- `{key}` → {name}")
-
-    st.markdown("---")
-    st.markdown("### 🔧 Model Parameters")
-    from config import XGBOOST_PARAMS
-    st.json(XGBOOST_PARAMS)
+    st.markdown("### 🔧 Configuration")
+    import config
+    st.json({
+        "screening": {"window_hours": config.PROPAGATION_WINDOW_HOURS, "step_s": config.PROPAGATION_STEP_SECONDS,
+                      "report_within_km": config.SCREENING_DISTANCE_KM},
+        "risk_levels_log10_pc": {k: v for k, v in config.RISK_LEVELS.items() if v != float("-inf")},
+        "review_if_miss_under_km": config.REVIEW_MISS_DISTANCE_KM,
+        "assumed_tle_sigma_km (at epoch, per day)": config.TLE_SIGMA_KM,
+        "manoeuvre_target": {"log10_pc": config.MANOEUVRE_TARGET_LOG_PC, "miss_km": config.MANOEUVRE_TARGET_MISS_KM,
+                             "max_dv_ms": config.MANOEUVRE_MAX_DV},
+        "auto_refresh_s": config.DASHBOARD_REFRESH_INTERVAL,
+    })

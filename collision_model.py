@@ -252,6 +252,7 @@ def alert_metrics(y_true: np.ndarray, y_pred: np.ndarray, threshold: float = RIS
         "alert_precision": float(precision_score(t, p, zero_division=0)),
         "alert_recall": float(recall_score(t, p, zero_division=0)),
         "alert_f1": float(f1_score(t, p, zero_division=0)),
+        "alert_accuracy": float((t == p).mean()),
     }
 
 
@@ -315,5 +316,41 @@ def train_full_pipeline():
     return model, metrics
 
 
+EVAL_PATH = MODEL_DIR / "orbitguard_model_eval.json"
+
+
+def evaluate_splits(model: "CollisionRiskModel" = None) -> dict:
+    """
+    Score the saved model on the same train / validation (event-grouped) / test
+    rows used in training: R², RMSE, MAE and alert accuracy / precision / recall.
+    Saved to models/orbitguard_model_eval.json for the dashboard.
+    """
+    if model is None:
+        model = CollisionRiskModel(use_gpu=False)
+        model.load()
+    train_df, test_df = model.preprocessor.load_data()
+    train_idx, val_idx = split_by_event(train_df[GROUP_COLUMN].values)
+    X_all = model.preprocessor.transform(train_df)
+    y_all = train_df[TARGET_COLUMN].to_numpy()
+    splits = {
+        "train": (X_all[train_idx], y_all[train_idx]),
+        "validation": (X_all[val_idx], y_all[val_idx]),
+        "test": (model.preprocessor.transform(test_df), test_df[TARGET_COLUMN].to_numpy()),
+    }
+    out = {}
+    for name, (X, y) in splits.items():
+        pred = model.predict(X)
+        out[name] = {
+            "rows": int(len(y)),
+            "r2": float(r2_score(y, pred)),
+            "rmse": float(np.sqrt(mean_squared_error(y, pred))),
+            "mae": float(mean_absolute_error(y, pred)),
+            **alert_metrics(y, pred),
+        }
+    EVAL_PATH.write_text(json.dumps(out, indent=2))
+    return out
+
+
 if __name__ == "__main__":
     model, metrics = train_full_pipeline()
+    evaluate_splits(model)

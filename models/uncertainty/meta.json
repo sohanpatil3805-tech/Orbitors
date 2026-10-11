@@ -1,0 +1,33 @@
+{
+  "features": [
+    "time_to_tca",
+    "obs_age",
+    "h_per",
+    "h_apo",
+    "inc",
+    "ecc",
+    "otype",
+    "span",
+    "F10",
+    "F3M",
+    "SSN",
+    "AP"
+  ],
+  "metrics": {
+    "training_time_seconds": 14.884845495223999,
+    "n_train_rows": 320093,
+    "n_test_rows": 48301,
+    "log_sigma_r_mae": 0.20853194288824436,
+    "log_sigma_r_baseline_mae": 0.3028138258869937,
+    "log_sigma_t_mae": 0.17356530246021357,
+    "log_sigma_t_baseline_mae": 0.4573629978222998,
+    "log_sigma_n_mae": 0.1896851828182024,
+    "log_sigma_n_baseline_mae": 0.27417571001719865,
+    "corr_tr_mae": 0.23797255839519024,
+    "corr_tr_baseline_mae": 0.2956539171615375,
+    "corr_nr_mae": 0.22182093374505404,
+    "corr_nr_baseline_mae": 0.30915709178131656,
+    "corr_nt_mae": 0.0703342399987293,
+    "corr_nt_baseline_mae": 0.07585572375952011
+  }
+}

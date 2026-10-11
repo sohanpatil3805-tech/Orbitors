@@ -1,0 +1,509 @@
+{
+  "generated_at": "2026-10-11T07:25:48+00:00",
+  "runtime_seconds": 19,
+  "checks": [
+    {
+      "section": "A. Collision probability engine",
+      "name": "A1 Reproduces ESA risk values",
+      "what": "Recompute log10 Pc for all 24,478 test CDMs from their geometry, covariance and object sizes, and compare with the risk ESA published in the dataset.",
+      "passed": true,
+      "result": "mean abs error 0.033 log10 units (risk > \u221210), Spearman 0.994, alert precision 0.991 / recall 0.960",
+      "criterion": "error < 0.1, Spearman > 0.98, precision and recall > 0.9",
+      "table": null
+    },
+    {
+      "section": "A. Collision probability engine",
+      "name": "A2 Closed-form case",
+      "what": "Head-on pass with zero miss distance and round uncertainty, where Pc = 1 \u2212 exp(\u2212R\u00b2/2\u03c3\u00b2) exactly.",
+      "passed": true,
+      "result": "worst relative error 2.0e-06",
+      "criterion": "< 1e-5 (64-point Gauss\u2013Legendre integration)",
+      "table": [
+        {
+          "sigma (m)": 10.0,
+          "radius (m)": 5.0,
+          "engine Pc": "1.175033e-01",
+          "exact Pc": "1.175031e-01",
+          "relative error": "1.8e-06"
+        },
+        {
+          "sigma (m)": 50.0,
+          "radius (m)": 10.0,
+          "engine Pc": "1.980137e-02",
+          "exact Pc": "1.980133e-02",
+          "relative error": "1.9e-06"
+        },
+        {
+          "sigma (m)": 200.0,
+          "radius (m)": 20.0,
+          "engine Pc": "4.987531e-03",
+          "exact Pc": "4.987521e-03",
+          "relative error": "1.9e-06"
+        },
+        {
+          "sigma (m)": 1000.0,
+          "radius (m)": 5.0,
+          "engine Pc": "1.249995e-05",
+          "exact Pc": "1.249992e-05",
+          "relative error": "2.0e-06"
+        }
+      ]
+    },
+    {
+      "section": "A. Collision probability engine",
+      "name": "A3 Monte Carlo agreement",
+      "what": "Random encounter geometries (correlated covariance, any crossing direction): engine Pc vs 4 million sampled encounters each.",
+      "passed": true,
+      "result": "6/6 cases within 4 MC standard errors",
+      "criterion": "all cases within 4 standard errors",
+      "table": [
+        {
+          "case": 1,
+          "engine Pc": "3.0810e-03",
+          "Monte Carlo Pc": "3.1200e-03",
+          "MC std error": "2.8e-05",
+          "agree": "yes"
+        },
+        {
+          "case": 2,
+          "engine Pc": "3.3387e-03",
+          "Monte Carlo Pc": "3.3355e-03",
+          "MC std error": "2.9e-05",
+          "agree": "yes"
+        },
+        {
+          "case": 3,
+          "engine Pc": "7.9000e-04",
+          "Monte Carlo Pc": "7.8175e-04",
+          "MC std error": "1.4e-05",
+          "agree": "yes"
+        },
+        {
+          "case": 4,
+          "engine Pc": "7.7858e-03",
+          "Monte Carlo Pc": "7.7975e-03",
+          "MC std error": "4.4e-05",
+          "agree": "yes"
+        },
+        {
+          "case": 5,
+          "engine Pc": "1.0638e-02",
+          "Monte Carlo Pc": "1.0595e-02",
+          "MC std error": "5.1e-05",
+          "agree": "yes"
+        },
+        {
+          "case": 6,
+          "engine Pc": "8.9146e-03",
+          "Monte Carlo Pc": "8.9005e-03",
+          "MC std error": "4.7e-05",
+          "agree": "yes"
+        }
+      ]
+    },
+    {
+      "section": "B. ML uncertainty model",
+      "name": "B1 Uncertainty prediction",
+      "what": "Predict each object's position uncertainty (radial, along-track, cross-track) on held-out CDMs; typical error shown as a factor (1.5\u00d7 = within 50%). Baseline: median of the training data for that object type.",
+      "passed": true,
+      "result": "ML better in 6/6 cases",
+      "criterion": "ML better in all 6",
+      "table": [
+        {
+          "object": "satellite",
+          "quantity": "\u03c3 r",
+          "ML error (\u00d7)": "1.39",
+          "baseline error (\u00d7)": "1.63"
+        },
+        {
+          "object": "satellite",
+          "quantity": "\u03c3 t",
+          "ML error (\u00d7)": "1.28",
+          "baseline error (\u00d7)": "2.35"
+        },
+        {
+          "object": "satellite",
+          "quantity": "\u03c3 n",
+          "ML error (\u00d7)": "1.23",
+          "baseline error (\u00d7)": "1.50"
+        },
+        {
+          "object": "other object",
+          "quantity": "\u03c3 r",
+          "ML error (\u00d7)": "1.88",
+          "baseline error (\u00d7)": "2.48"
+        },
+        {
+          "object": "other object",
+          "quantity": "\u03c3 t",
+          "ML error (\u00d7)": "1.74",
+          "baseline error (\u00d7)": "3.49"
+        },
+        {
+          "object": "other object",
+          "quantity": "\u03c3 n",
+          "ML error (\u00d7)": "1.95",
+          "baseline error (\u00d7)": "2.35"
+        }
+      ]
+    },
+    {
+      "section": "B. ML uncertainty model",
+      "name": "B2 Risk without real covariance (live situation)",
+      "what": "Recompute every test CDM's risk using only predicted uncertainty \u2014 as for live public orbit data \u2014 and compare with ESA's risk. Baseline: same physics with per-type median uncertainty.",
+      "passed": true,
+      "result": "ML: Spearman 0.711, error 2.98 \u00b7 baseline: Spearman 0.444, error 8.16",
+      "criterion": "ML beats the baseline on both",
+      "table": [
+        {
+          "method": "ML uncertainty",
+          "Spearman": 0.711,
+          "mean abs error": 2.98,
+          "alert precision": 0.499,
+          "alert recall": 0.656
+        },
+        {
+          "method": "Baseline uncertainty",
+          "Spearman": 0.444,
+          "mean abs error": 8.16,
+          "alert precision": 0.411,
+          "alert recall": 0.662
+        },
+        {
+          "method": "Real CDM covariance (upper bound)",
+          "Spearman": 0.994,
+          "mean abs error": 0.033,
+          "alert precision": 0.991,
+          "alert recall": 0.96
+        }
+      ]
+    },
+    {
+      "section": "B. ML uncertainty model",
+      "name": "B3 Full-CDM XGBoost model",
+      "what": "The original model (all 118 CDM features) on the test set.",
+      "passed": true,
+      "result": "R\u00b2 0.9998, alert precision 0.971 / recall 0.953",
+      "criterion": "precision and recall > 0.9",
+      "table": null
+    },
+    {
+      "section": "C. Screening (SGP4)",
+      "name": "C1 Finds simulated threats",
+      "what": "Objects placed on known collision courses (0 m to 3 km, 6\u201350 h ahead, various crossing angles) must be found at the right time and distance.",
+      "passed": true,
+      "result": "4/4 found",
+      "criterion": "all found, TCA within 1 s, miss within 5 m",
+      "table": [
+        {
+          "satellite": "ISS (ZARYA)",
+          "hours ahead": 18.0,
+          "injected miss (m)": 25.0,
+          "found miss (m)": 25.0,
+          "TCA error (s)": 0.0,
+          "found": "yes"
+        },
+        {
+          "satellite": "SENTINEL-2A",
+          "hours ahead": 30.0,
+          "injected miss (m)": 500.0,
+          "found miss (m)": 500.0,
+          "TCA error (s)": -0.0,
+          "found": "yes"
+        },
+        {
+          "satellite": "HST",
+          "hours ahead": 50.0,
+          "injected miss (m)": 3000.0,
+          "found miss (m)": 3000.0,
+          "TCA error (s)": -0.0,
+          "found": "yes"
+        },
+        {
+          "satellite": "ICESAT-2",
+          "hours ahead": 6.0,
+          "injected miss (m)": 0.0,
+          "found miss (m)": 0.0,
+          "TCA error (s)": 0.0,
+          "found": "yes"
+        }
+      ]
+    },
+    {
+      "section": "C. Screening (SGP4)",
+      "name": "C2 Agreement with CelesTrak SOCRATES",
+      "what": "CelesTrak's independent SOCRATES service predicts close approaches with SGP4. For the 356 upcoming pairs it computed from the same element sets we hold, our TCA and miss distance must match. (Across all 3000 pairs, 34% agree within 1 km; the rest differ because one side has newer orbit data \u2014 mostly manoeuvring Starlinks.)",
+      "passed": true,
+      "result": "median |\u0394range| 0.3 m, median |\u0394TCA| 0.004 s, 100% within 100 m and 1 s",
+      "criterion": "same-data pairs: median |\u0394range| < 10 m, median |\u0394TCA| < 0.1 s, > 90% within 100 m and 1 s",
+      "table": [
+        {
+          "pair": "HAWK-C [+] / STARLINK-31572 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.729,
+          "our range (km)": 13.9452,
+          "\u0394range (m)": 13216.2,
+          "\u0394TCA (s)": -1.139
+        },
+        {
+          "pair": "STARLINK-30311 [+] / STP-S29A OBJECT A [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.946,
+          "our range (km)": 0.9465,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": -0.0
+        },
+        {
+          "pair": "SUPERVIEW NEO-2 03 [+] / SUPERVIEW NEO-2 04 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.221,
+          "our range (km)": 0.2205,
+          "\u0394range (m)": -0.5,
+          "\u0394TCA (s)": 0.025
+        },
+        {
+          "pair": "PIESAT A [+] / PIESAT D [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.838,
+          "our range (km)": 0.8385,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": 0.001
+        },
+        {
+          "pair": "SUPERVIEW NEO-2 03 [+] / SUPERVIEW NEO-2 04 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.239,
+          "our range (km)": 0.2395,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": -0.003
+        },
+        {
+          "pair": "SUPERVIEW NEO-2 05 [+] / SUPERVIEW NEO-2 06 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.343,
+          "our range (km)": 0.3425,
+          "\u0394range (m)": -0.5,
+          "\u0394TCA (s)": 0.001
+        },
+        {
+          "pair": "SUPERVIEW NEO-2 03 [+] / SUPERVIEW NEO-2 04 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.184,
+          "our range (km)": 0.1845,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": -0.017
+        },
+        {
+          "pair": "STARLINK-37514 [+] / STARLINK-38233 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.641,
+          "our range (km)": 0.6415,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": -0.0
+        },
+        {
+          "pair": "TIANHUI 5C [+] / TIANHUI 5D [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.57,
+          "our range (km)": 0.5695,
+          "\u0394range (m)": -0.5,
+          "\u0394TCA (s)": 0.006
+        },
+        {
+          "pair": "TIANHUI 5C [+] / TIANHUI 5D [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.428,
+          "our range (km)": 0.4275,
+          "\u0394range (m)": -0.5,
+          "\u0394TCA (s)": -0.003
+        },
+        {
+          "pair": "TIANHUI 5C [+] / TIANHUI 5D [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.428,
+          "our range (km)": 0.4285,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": -0.012
+        },
+        {
+          "pair": "STARLINK-5720 [+] / IRIS-F3 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.566,
+          "our range (km)": 0.5655,
+          "\u0394range (m)": -0.5,
+          "\u0394TCA (s)": -0.0
+        },
+        {
+          "pair": "SUPERVIEW NEO-2 03 [+] / SUPERVIEW NEO-2 04 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.43,
+          "our range (km)": 0.4295,
+          "\u0394range (m)": -0.5,
+          "\u0394TCA (s)": -0.009
+        },
+        {
+          "pair": "TIANHUI 5C [+] / TIANHUI 5D [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.423,
+          "our range (km)": 0.4235,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": -0.009
+        },
+        {
+          "pair": "ION SCV-011 [+] / STARLINK-30991 [+]",
+          "same orbit data": true,
+          "SOCRATES range (km)": 0.626,
+          "our range (km)": 0.6265,
+          "\u0394range (m)": 0.5,
+          "\u0394TCA (s)": 0.0
+        }
+      ]
+    },
+    {
+      "section": "C. Screening (SGP4)",
+      "name": "C3 Agreement with Space-Track official CDMs",
+      "what": "Needs SPACETRACK_USER / SPACETRACK_PASSWORD.",
+      "passed": null,
+      "result": "skipped (Space-Track not configured)",
+      "criterion": "median |\u0394miss| < 1 km",
+      "table": null
+    },
+    {
+      "section": "D. Manoeuvre physics",
+      "name": "D1 Linear burn model",
+      "what": "The planner searches burns with a linear (sensitivity) model; compare it with full nonlinear J2 propagation over one day.",
+      "passed": true,
+      "result": "worst error 1.89%",
+      "criterion": "< 1% for 0.1 m/s, < 3% for 1 m/s",
+      "table": [
+        {
+          "burn": "prograde 0.1 m/s",
+          "max shift after 1 day (km)": 25.918,
+          "linear-model error": "0.17%",
+          "limit": "1%"
+        },
+        {
+          "burn": "prograde 1.0 m/s",
+          "max shift after 1 day (km)": 259.102,
+          "linear-model error": "1.89%",
+          "limit": "3%"
+        },
+        {
+          "burn": "radial-out 0.1 m/s",
+          "max shift after 1 day (km)": 0.361,
+          "linear-model error": "0.04%",
+          "limit": "1%"
+        },
+        {
+          "burn": "radial-out 1.0 m/s",
+          "max shift after 1 day (km)": 3.625,
+          "linear-model error": "0.46%",
+          "limit": "3%"
+        },
+        {
+          "burn": "normal 0.1 m/s",
+          "max shift after 1 day (km)": 0.091,
+          "linear-model error": "0.17%",
+          "limit": "1%"
+        },
+        {
+          "burn": "normal 1.0 m/s",
+          "max shift after 1 day (km)": 0.911,
+          "linear-model error": "1.84%",
+          "limit": "3%"
+        }
+      ]
+    },
+    {
+      "section": "D. Manoeuvre physics",
+      "name": "D2 Clohessy\u2013Wiltshire drift",
+      "what": "A 10 cm/s prograde burn on the ISS orbit: along-track drift must match the textbook relative-motion solution (\u22123\u00b7\u0394V\u00b7t growth plus a 4\u0394V/n oscillation).",
+      "passed": true,
+      "result": "along-track drift within 5% of theory",
+      "criterion": "< 5% at every sample",
+      "table": [
+        {
+          "time after burn (orbits)": 0.25,
+          "radial (m) model": 177.6,
+          "radial (m) CW": 177.5,
+          "along-track (m) model": -63.2,
+          "along-track (m) CW": -63.2,
+          "along-track error": "0.0%"
+        },
+        {
+          "time after burn (orbits)": 0.5,
+          "radial (m) model": 355.5,
+          "radial (m) CW": 355.1,
+          "along-track (m) model": -836.9,
+          "along-track (m) CW": -836.6,
+          "along-track error": "0.0%"
+        },
+        {
+          "time after burn (orbits)": 1.0,
+          "radial (m) model": -0.6,
+          "radial (m) CW": 0.0,
+          "along-track (m) model": -1676.0,
+          "along-track (m) CW": -1673.2,
+          "along-track error": "0.2%"
+        },
+        {
+          "time after burn (orbits)": 2.0,
+          "radial (m) model": -1.6,
+          "radial (m) CW": 0.0,
+          "along-track (m) model": -3352.0,
+          "along-track (m) CW": -3346.4,
+          "along-track error": "0.2%"
+        }
+      ]
+    },
+    {
+      "section": "D. Manoeuvre physics",
+      "name": "D3 Rocket equation",
+      "what": "Fuel for a 1 m/s burn of a 500 kg spacecraft with Isp 220 s.",
+      "passed": true,
+      "result": "231.7 g",
+      "criterion": "231.7 g (Tsiolkovsky)",
+      "table": null
+    },
+    {
+      "section": "D. Manoeuvre physics",
+      "name": "D4 End to end: alert \u2192 burn \u2192 independent re-check",
+      "what": "Simulated threats on collision courses must raise a red alert; the suggested burn is applied in an independent propagation and must clear the threat (\u2265 target miss, Pc \u2264 target) without new HIGH/CRITICAL approaches.",
+      "passed": true,
+      "result": "3/3 scenarios cleared",
+      "criterion": "alert DANGER; new miss \u2265 1.8 km; log10 Pc \u2264 -6.9; no new high-risk approaches",
+      "table": [
+        {
+          "scenario": "ISS (ZARYA) vs simulated debris",
+          "injected miss (m)": 20.0,
+          "alert": "CRITICAL (-2.55)",
+          "who moves": "ISS (ZARYA)",
+          "burn": "prograde 10.98 cm/s, 7.5 orbits early",
+          "independent new miss (km)": 10.607,
+          "new log10 Pc": -6.99,
+          "new high-risk approaches": 0
+        },
+        {
+          "scenario": "SENTINEL-2A vs simulated debris",
+          "injected miss (m)": 10.0,
+          "alert": "HIGH (-4.25)",
+          "who moves": "SENTINEL-2A",
+          "burn": "retrograde 4.85 cm/s, 7.5 orbits early",
+          "independent new miss (km)": 3.845,
+          "new log10 Pc": -7.01,
+          "new high-risk approaches": 0
+        },
+        {
+          "scenario": "SWOT vs simulated satellite",
+          "injected miss (m)": 50.0,
+          "alert": "HIGH (-4.03)",
+          "who moves": "SWOT",
+          "burn": "retrograde 5.67 cm/s, 7.5 orbits early",
+          "independent new miss (km)": 6.822,
+          "new log10 Pc": -7.01,
+          "new high-risk approaches": 0
+        }
+      ]
+    }
+  ]
+}
